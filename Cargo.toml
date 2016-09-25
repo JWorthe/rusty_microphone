@@ -1,0 +1,9 @@
+[package]
+name = "musician_training"
+version = "0.1.0"
+authors = ["Justin Worthe <justin.worthe@gmail.com>"]
+
+[dependencies]
+portaudio = "0.6.4"
+dft = "0.4.3"
+gtk = "0.1.0"
