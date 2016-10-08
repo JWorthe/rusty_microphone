@@ -1,0 +1,44 @@
+#+TITLE: Musician Training
+
+* Summary
+
+The goal of this project is to create a dashboard for real-time
+feedback to musicians while they are practicing. This is a personal
+needs project, and so will at least initially focus only on the
+trumpet, and problems that I personally face.
+
+The other goal of this project is to give me a platform for learning
+Rust, and various other technologies that I do not get to touch in my
+day to day work.
+
+* Tasks
+** Project setup
+*** TODO Cargo build process
+- This is probably already in place, since it's 'just use Cargo', but
+  it needs to be in the docs mentioned below.
+*** TODO Getting started docs
+- For myself two months later. This doubles as revision exercise on
+  how a Rust project can be laid out.
+*** TODO CI build
+- it's only me on the project, so manually triggered with a script and
+  not actually on a CI server is fine. This is probably just 'use
+  Cargo test', but again, formalize and in the docs above.
+** Audio interfaces
+*** TODO Read the list of microphones.
+*** TODO Start listening on a selected microphone, and let other plugins process the signal.
+- There needs to be able to be multiple of these, and those listening
+  need to be able to be turned on and off independently.
+*** TODO Plugin for finding frequency spectrum
+*** TODO Plugin for finding fundamental frequencies, expressed as a note and amount sharp/flat
+*** TODO Plugin for recording and playback
+- During playback, it would be cool if the other plugins can be
+  pointed at the sound being played back.
+** GUI
+*** TODO Opens a window with a drop down of available microphones
+*** TODO Real-time updating graph of frequency spectrum
+*** TODO Real-time updating graphical representation of fundamental frequency
+*** TODO Recording and playback controls
+*** TODO Enabling or disabling of plugins and their GUI elements on the fly
+- This is necessary because as the project scales, you might want to
+  be able to focus on certain areas and hide others, or some things
+  may be processor-intensive.
