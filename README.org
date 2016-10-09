@@ -11,20 +11,59 @@ The other goal of this project is to give me a platform for learning
 Rust, and various other technologies that I do not get to touch in my
 day to day work.
 
+* Getting started
+
+This is a Rust project. The latest version of the Rust compiler and
+Cargo are available from your system's package manager, or from
+https://www.rust-lang.org/.
+
+To compile the project
+src_sh{cargo build}
+
+To compile and run
+src_sh{cargo run}
+
+To compile and run unit tests. Use this as the CI build command if
+setting up a CI server.
+src_sh{cargo test}
+
+* Project structure
+
+** File Structure
+
+- Dependencies are declared in ~Cargo.toml~
+- The project main function for the project executable is in
+  ~src/main.rs~. This should only be an entry point. Any actual
+  functionality should be part of the library build.
+- The other files to be included in the build are declared in
+  ~src/lib.rs~.
+- Unit tests are kept in the same files as the units they are testing.
+- The main function will launch the GUI in ~src/gui.rs~. From here,
+  the GUI can call out to the other parts of the library as required.
+
+** General Architectural Guidelines
+
+- Try to keep functions pure when possible. If not possible, try to
+  isolate the impure parts.
+- Split functionality into files based on their logical separation of
+  concerns. Try to keep mathematical processing separate from
+  presentation logic, so that the processing can be reused
+  independently.
+
 * Tasks
 ** Project setup
-*** TODO Cargo build process
+*** DONE Cargo build process
 - This is probably already in place, since it's 'just use Cargo', but
   it needs to be in the docs mentioned below.
-*** TODO Getting started docs
+*** DONE Getting started docs
 - For myself two months later. This doubles as revision exercise on
   how a Rust project can be laid out.
-*** TODO CI build
+*** DONE CI build
 - it's only me on the project, so manually triggered with a script and
   not actually on a CI server is fine. This is probably just 'use
   Cargo test', but again, formalize and in the docs above.
 ** Audio interfaces
-*** TODO Read the list of microphones.
+*** DONE Read the list of microphones.
 *** TODO Start listening on a selected microphone, and let other plugins process the signal.
 - There needs to be able to be multiple of these, and those listening
   need to be able to be turned on and off independently.
@@ -34,7 +73,7 @@ day to day work.
 - During playback, it would be cool if the other plugins can be
   pointed at the sound being played back.
 ** GUI
-*** TODO Opens a window with a drop down of available microphones
+*** DONE Opens a window with a drop down of available microphones
 *** TODO Real-time updating graph of frequency spectrum
 *** TODO Real-time updating graphical representation of fundamental frequency
 *** TODO Recording and playback controls
