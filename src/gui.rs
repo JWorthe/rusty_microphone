@@ -8,7 +8,8 @@ pub fn start_gui() -> Result<(), String> {
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Musician Training");
 
-    let audio_devices = try!(::audio::get_device_list().map_err(|e| e.to_string()));
+    let pa = ::audio::init().expect("Could not init portaudio");
+    let audio_devices = try!(::audio::get_device_list(&pa).map_err(|e| e.to_string()));
     let dropdown = gtk::ComboBoxText::new();
     for (index, name) in audio_devices {
         dropdown.append(Some(format!("{}", index).as_ref()), name.as_ref());
