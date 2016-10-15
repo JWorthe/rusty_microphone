@@ -2,6 +2,8 @@ extern crate portaudio;
 use portaudio as pa;
 
 use std::sync::mpsc::*;
+use std::io;
+use std::io::Write;
 
 const SAMPLE_RATE: f64 = 44100.0;
 const FRAMES: usize = 512;
@@ -37,8 +39,17 @@ fn get_device_list_returns_devices() {
 
 pub struct OpenRecordingChannel<'a> {
     receiver: Receiver<Vec<f64>>,
-    //pa: &'a portaudio::PortAudio,
     stream: pa::Stream<'a, pa::NonBlocking, pa::Input<f32>>
+}
+
+impl<'a> Drop for OpenRecordingChannel<'a> {
+    fn drop(&mut self) {
+         //if stream doesn't close cleanly, don't end the world. It's probably fine.
+        match self.stream.stop() {
+            Result::Err(err) => {writeln!(io::stderr(), "Failed to close audio stream. {}", err).ok();},
+            _ => {}
+        }
+    }
 }
 
 pub fn start_listening<'a>(pa: &'a pa::PortAudio, device_index: u32) -> Result<OpenRecordingChannel<'a>, pa::Error> {
@@ -68,14 +79,18 @@ pub fn start_listening<'a>(pa: &'a pa::PortAudio, device_index: u32) -> Result<O
     let mut stream = try!(pa.open_non_blocking_stream(stream_settings, callback));
     try!(stream.start());
     
-
-    //How do I call this? try!(stream.stop());
-
     Ok(OpenRecordingChannel {
         receiver: receiver,
-//        pa: &pa,
         stream: stream
     })
+}
+
+#[test]
+fn start_listening_returns_successfully() {
+    let pa = init().expect("Could not init portaudio");
+    let devices = get_device_list(&pa).expect("Getting devices had an error");
+    let device = devices.first().expect("Should have at least one device");
+    let recording_channel = start_listening(&pa, device.0).expect("Error starting listening to first channel");
 }
 
 
