@@ -38,7 +38,7 @@ fn get_device_list_returns_devices() {
 
 
 pub struct OpenRecordingChannel<'a> {
-    receiver: Receiver<Vec<f64>>,
+    receiver: Receiver<Vec<f32>>,
     stream: pa::Stream<'a, pa::NonBlocking, pa::Input<f32>>
 }
 
@@ -72,7 +72,7 @@ pub fn start_listening<'a>(pa: &'a pa::PortAudio, device_index: u32) -> Result<O
 
     // This callback A callback to pass to the non-blocking stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
-        sender.send(buffer.iter().map(|x| *x as f64).collect()).ok();
+        sender.send(buffer.iter().cloned().collect()).ok();
         pa::Continue
     };
 
@@ -90,7 +90,7 @@ fn start_listening_returns_successfully() {
     let pa = init().expect("Could not init portaudio");
     let devices = get_device_list(&pa).expect("Getting devices had an error");
     let device = devices.first().expect("Should have at least one device");
-    let recording_channel = start_listening(&pa, device.0).expect("Error starting listening to first channel");
+    start_listening(&pa, device.0).expect("Error starting listening to first channel");
 }
 
 

@@ -6,4 +6,8 @@ authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 [dependencies]
 portaudio = "0.6.4"
 dft = "0.4.3"
-gtk = "0.1.0"
+gdk = "0.5.0"
+
+[dependencies.gtk]
+version = "0.1.0"
+features = ["v3_10"]
