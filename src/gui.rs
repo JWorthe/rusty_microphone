@@ -1,5 +1,6 @@
 use gtk;
 use gtk::prelude::*;
+use std::cell::Cell;
 
 const GUI_XML: &'static str = r#"
 <interface>
@@ -16,7 +17,8 @@ const GUI_XML: &'static str = r#"
 pub fn start_gui() -> Result<(), String> {
     let pa = try!(::audio::init().map_err(|e| e.to_string()));
     let microphones = try!(::audio::get_device_list(&pa).map_err(|e| e.to_string()));
-
+    let selected_mic: Cell<Option<u32>> = Cell::new(None);
+    
     try!(gtk::init().map_err(|_| "Failed to initialize GTK."));
 
     let gtk_builder = try!(create_window(microphones));
@@ -25,10 +27,9 @@ pub fn start_gui() -> Result<(), String> {
         gtk_builder.get_object("dropdown")
                    .ok_or("GUI does not contain an object with id 'dropdown'")
     );
-    dropdown.connect_changed(|ref dropdown| {
-        println!("{}", dropdown.get_active_id().unwrap());
-        //This callback can now mutate state on the same level as our
-        //other logic to get the list of microphones
+    dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
+        selected_mic.set(dropdown.get_active_id().and_then(|id| id.parse().ok()));        
+        println!("{}", selected_mic.get().unwrap());
     });
 
     gtk::main();
