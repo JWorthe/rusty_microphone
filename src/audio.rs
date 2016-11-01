@@ -2,8 +2,6 @@ extern crate portaudio;
 use portaudio as pa;
 
 use std::sync::mpsc::*;
-use std::io;
-use std::io::Write;
 
 const SAMPLE_RATE: f64 = 44100.0;
 const FRAMES: usize = 512;
@@ -37,23 +35,12 @@ fn get_device_list_returns_devices() {
 }
 
 
-pub struct OpenRecordingChannel<'a> {
-    receiver: Receiver<Vec<f32>>,
-    stream: pa::Stream<'a, pa::NonBlocking, pa::Input<f32>>
+pub struct OpenRecordingChannel {
+    pub receiver: Receiver<Vec<f32>>,
+    pub stream: pa::Stream<pa::NonBlocking, pa::Input<f32>>
 }
 
-impl<'a> Drop for OpenRecordingChannel<'a> {
-    fn drop(&mut self) {
-         //if stream doesn't close cleanly, don't end the world. It's probably fine.
-        match self.stream.stop() {
-            Result::Err(err) => {writeln!(io::stderr(), "Failed to close audio stream. {}", err).ok();},
-            _ => {}
-        }
-    }
-}
-
-pub fn start_listening<'a>(pa: &'a pa::PortAudio, device_index: u32) -> Result<OpenRecordingChannel<'a>, pa::Error> {
-    //let pa = try!(pa::PortAudio::new());
+pub fn start_listening(pa: &pa::PortAudio, device_index: u32) -> Result<OpenRecordingChannel, pa::Error> {
     let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
     let latency = device_info.default_low_input_latency;
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 
 [dependencies]
-portaudio = "0.6.4"
+portaudio = "0.7.0"
 dft = "0.4.3"
 gdk = "0.5.0"
 
