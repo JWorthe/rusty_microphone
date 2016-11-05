@@ -34,13 +34,8 @@ fn get_device_list_returns_devices() {
     assert!(devices.len() > 0);
 }
 
-
-pub struct OpenRecordingChannel {
-    pub receiver: Receiver<Vec<f32>>,
-    pub stream: pa::Stream<pa::NonBlocking, pa::Input<f32>>
-}
-
-pub fn start_listening(pa: &pa::PortAudio, device_index: u32) -> Result<OpenRecordingChannel, pa::Error> {
+pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
+                       sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {    
     let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
     let latency = device_info.default_low_input_latency;
 
@@ -54,22 +49,16 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32) -> Result<OpenReco
     // Construct the settings with which we'll open our stream.
     let stream_settings = pa::InputStreamSettings::new(input_params, SAMPLE_RATE, FRAMES as u32);
 
-    // This channel will let us read from and control the audio stream
-    let (sender, receiver) = channel();
-
     // This callback A callback to pass to the non-blocking stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
-        sender.send(buffer.iter().cloned().collect()).ok();
+        sender.send(buffer.iter().map(|&s| s as f64).collect()).ok();
         pa::Continue
     };
 
     let mut stream = try!(pa.open_non_blocking_stream(stream_settings, callback));
     try!(stream.start());
     
-    Ok(OpenRecordingChannel {
-        receiver: receiver,
-        stream: stream
-    })
+    Ok(stream)
 }
 
 #[test]
@@ -77,24 +66,6 @@ fn start_listening_returns_successfully() {
     let pa = init().expect("Could not init portaudio");
     let devices = get_device_list(&pa).expect("Getting devices had an error");
     let device = devices.first().expect("Should have at least one device");
-    start_listening(&pa, device.0).expect("Error starting listening to first channel");
+    let (sender, _) = channel();
+    start_listening(&pa, device.0, sender).expect("Error starting listening to first channel");
 }
-
-
-/*
-   let mut samples_index = 0;
-    while let Ok(samples) = receiver.recv() {
-        samples_index += 1;
-        if samples_index % 100 != 0 {
-            continue;
-        }
-
-        let frequency_domain = ::transforms::fft(samples, SAMPLE_RATE);
-            
-        let max_frequency = frequency_domain.iter()
-            .fold(None as Option<::transforms::FrequencyBucket>, |max, next|
-                  if max.is_none() || max.clone().unwrap().intensity < next.intensity { Some(next.clone()) } else { max }
-            ).unwrap().max_freq;
-        println!("{}Hz", max_frequency.floor());
-    }
-*/
