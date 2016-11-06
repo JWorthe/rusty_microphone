@@ -51,3 +51,8 @@ fn fft_on_sine_wave() {
     assert!(peak.min_freq <= frequency);
     assert!(peak.max_freq >= frequency);
 }
+
+pub fn hz_to_pitch(hz: f64) -> String {
+    let pitch_number = 49.0 + 12.0 * (hz / 440.0).log2();
+    pitch_number.floor().to_string()
+}
