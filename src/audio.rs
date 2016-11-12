@@ -24,7 +24,7 @@ pub fn get_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Err
     Ok(list)
 }
 
-#[test]
+//#[test]
 fn get_device_list_returns_devices() {
     let pa = init().expect("Could not init portaudio");
     let devices = get_device_list(&pa).expect("Getting devices had an error");
@@ -61,7 +61,7 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
     Ok(stream)
 }
 
-#[test]
+//#[test]
 fn start_listening_returns_successfully() {
     let pa = init().expect("Could not init portaudio");
     let devices = get_device_list(&pa).expect("Getting devices had an error");

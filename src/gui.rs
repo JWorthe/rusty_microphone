@@ -123,12 +123,11 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender
     thread::spawn(move || {
         for samples in mic_receiver {
             let frequency_domain = ::transforms::fft(samples, 44100.0);
-            
-            let max_frequency = frequency_domain.iter()
-                .fold(None as Option<::transforms::FrequencyBucket>, |max, next|
-                      if max.is_none() || max.clone().unwrap().intensity < next.intensity { Some(next.clone()) } else { max }
-                ).unwrap().max_freq;
-            let pitch = ::transforms::hz_to_pitch(max_frequency);
+            let fundamental = ::transforms::find_fundamental_frequency(&frequency_domain);
+            let pitch = match fundamental {
+                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
+                None => "".to_string()
+            };
             pitch_sender.send(pitch).ok();
         }
     });
