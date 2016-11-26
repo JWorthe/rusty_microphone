@@ -11,6 +11,9 @@ The other goal of this project is to give me a platform for learning
 Rust, and various other technologies that I do not get to touch in my
 day to day work.
 
+NB this is a work in progress, and does not provide any actual value
+yet.
+
 * Getting started
 
 This is a Rust project. The latest version of the Rust compiler and
@@ -64,20 +67,12 @@ src_sh{cargo test}
   Cargo test', but again, formalize and in the docs above.
 ** Audio interfaces
 *** DONE Read the list of microphones.
-*** TODO Start listening on a selected microphone, and let other plugins process the signal.
-- There needs to be able to be multiple of these, and those listening
-  need to be able to be turned on and off independently.
-*** TODO Plugin for finding frequency spectrum
-*** TODO Plugin for finding fundamental frequencies, expressed as a note and amount sharp/flat
-*** TODO Plugin for recording and playback
-- During playback, it would be cool if the other plugins can be
-  pointed at the sound being played back.
+*** DONE Start listening on a selected microphone, and let other plugins process the signal.
+*** TODO Function for finding frequency spectrum
+*** TODO Function for finding fundamental frequencies, expressed as a note and amount sharp/flat
+*** TODO Function for recording and playback
 ** GUI
 *** DONE Opens a window with a drop down of available microphones
 *** TODO Real-time updating graph of frequency spectrum
 *** TODO Real-time updating graphical representation of fundamental frequency
 *** TODO Recording and playback controls
-*** TODO Enabling or disabling of plugins and their GUI elements on the fly
-- This is necessary because as the project scales, you might want to
-  be able to focus on certain areas and hide others, or some things
-  may be processor-intensive.

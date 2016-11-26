@@ -1,5 +1,5 @@
 [package]
-name = "musician_training"
+name = "rusty_microphone"
 version = "0.1.0"
 authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 

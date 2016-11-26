@@ -1,6 +1,6 @@
-extern crate musician_training;
+extern crate rusty_microphone;
 
-use musician_training::*;
+use rusty_microphone::*;
 
 fn main() {
     let gui_result = gui::start_gui();

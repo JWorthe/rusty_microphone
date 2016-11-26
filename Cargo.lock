@@ -1,5 +1,5 @@
 [root]
-name = "musician_training"
+name = "rusty_microphone"
 version = "0.1.0"
 dependencies = [
  "dft 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
