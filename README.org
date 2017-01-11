@@ -68,11 +68,17 @@ src_sh{cargo test}
 ** Audio interfaces
 *** DONE Read the list of microphones.
 *** DONE Start listening on a selected microphone, and let other plugins process the signal.
-*** TODO Function for finding frequency spectrum
+*** DONE Function for finding frequency spectrum
 *** TODO Function for finding fundamental frequencies, expressed as a note and amount sharp/flat
-*** TODO Function for recording and playback
+There is an implementation here that works for sinusoids in test
+cases, but really does not work for real signals. This may need a
+different method of finding frequencies, such as using correlation
+with a time delay.
 ** GUI
 *** DONE Opens a window with a drop down of available microphones
 *** TODO Real-time updating graph of frequency spectrum
+This is mostly for debugging purposes, but having a component that a
+debugging graph can be put into may be useful.
 *** TODO Real-time updating graphical representation of fundamental frequency
-*** TODO Recording and playback controls
+We have a label so far, but a label isn't exactly a nice thing to
+watch while playing.
