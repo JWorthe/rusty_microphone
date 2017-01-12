@@ -11,4 +11,4 @@ addons:
     packages:
     - libgtk-3-bin
     - libgtk-3-dev
-    - libpangxo1.0-0
+    - libpango1.0-0
