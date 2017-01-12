@@ -39,9 +39,6 @@ pub fn find_fundamental_frequency(frequency_domain: &Vec<FrequencyBucket>) -> Op
     let positive_buckets = frequency_domain.iter().filter(|x| x.intensity > 0.0).cloned().collect::<Vec<_>>();
     let average_intensity = positive_buckets.iter().map(|x| x.intensity).sum::<f64>() / frequency_domain.len() as f64;
     let significant_buckets = positive_buckets.iter().filter(|x| x.intensity > average_intensity).cloned().collect::<Vec<_>>();
-    for bucket in significant_buckets.iter() {
-        //println!("{:?}", bucket);
-    }
     
     let max_bucket = significant_buckets.iter()
         .fold(None as Option<::transforms::FrequencyBucket>, |max, next|
@@ -88,7 +85,8 @@ mod tests {
 
     #[test]
     fn fft_on_two_sine_waves() {
-        let samples1k = sample_sinusoud(0.5, 1000.0, 0.0);
+        //Unfortunately, real signals won't be this neat
+        let samples1k = sample_sinusoud(2.0, 1000.0, 0.0);
         let samples2k = sample_sinusoud(1.0, 10000.0, 0.0);
         let expected_fundamental = 1000.0;
         

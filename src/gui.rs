@@ -108,7 +108,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender
     thread::spawn(move || {
         for samples in mic_receiver {
             let frequency_domain = ::transforms::fft(samples, 44100.0);
-            freq_sender.send(frequency_domain.clone());
+            freq_sender.send(frequency_domain.clone()).ok();
             let fundamental = ::transforms::find_fundamental_frequency(&frequency_domain);
             let pitch = match fundamental {
                 Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
