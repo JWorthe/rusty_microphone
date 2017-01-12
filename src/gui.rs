@@ -8,26 +8,12 @@ use std::io::Write;
 use std::thread;
 use std::sync::mpsc::*;
 
-const GUI_XML: &'static str = r#"
-<interface>
-  <object class="GtkWindow" id="window">
-    <property name="title">Rusty Microphone</property>
-    <child>
-      <object class="GtkVBox">
-        <child>
-          <object class="GtkComboBoxText" id="dropdown">
-          </object>
-        </child>
-        <child>
-          <object class="GtkLabel" id="pitch-label">
-            <property name="label">Hello world</property>
-          </object>
-        </child>
-      </object>
-    </child>
-  </object>
-</interface>
-"#;
+struct RustyUi {
+    window: gtk::Window,
+    dropdown: gtk::ComboBoxText,
+    pitch_label: gtk::Label,
+    freq_chart: gtk::DrawingArea
+}
 
 struct ApplicationState {
     pa: pa::PortAudio,
@@ -46,15 +32,94 @@ pub fn start_gui() -> Result<(), String> {
     
     try!(gtk::init().map_err(|_| "Failed to initialize GTK."));
 
-    let gtk_builder = try!(create_window(microphones));
+    let ui = create_window(microphones);
 
-    connect_dropdown_choose_microphone(&gtk_builder, mic_sender, state.clone());
+    connect_dropdown_choose_microphone(&ui.dropdown, mic_sender, state.clone());
 
     let (pitch_sender, pitch_receiver) = channel();
+    let (freq_sender, freq_receiver) = channel();
     
-    start_processing_audio(mic_receiver, pitch_sender);
-        
-    let pitch_label: gtk::Label = gtk_builder.get_object("pitch-label").expect("GUI does not contain an object with id 'pitch-label'");
+    start_processing_audio(mic_receiver, pitch_sender, freq_sender);
+    
+    setup_pitch_label_callbacks(ui.pitch_label, pitch_receiver);
+    setup_drawing_area_callbacks(ui.freq_chart, freq_receiver);
+
+    gtk::main();
+    Ok(())
+}
+
+fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
+    let window = gtk::Window::new(gtk::WindowType::Toplevel);
+    window.set_title("Rusty Microphone");
+    window.connect_delete_event(|_, _| {
+        gtk::main_quit();
+        Inhibit(false)
+    });
+
+    let layout_box = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    window.add(&layout_box);
+
+    let dropdown = gtk::ComboBoxText::new();
+    set_dropdown_items(&dropdown, microphones);
+    layout_box.add(&dropdown);
+
+    let pitch_label = gtk::Label::new(None);
+    layout_box.add(&pitch_label);
+
+    let freq_chart = gtk::DrawingArea::new();
+    freq_chart.set_size_request(600, 400);
+    layout_box.add(&freq_chart);
+
+    window.show_all();
+    
+    RustyUi {
+        window: window,
+        dropdown: dropdown,
+        pitch_label: pitch_label,
+        freq_chart: freq_chart
+    }
+}
+
+fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, String)>) {
+    for (index, name) in microphones {
+        dropdown.append(Some(format!("{}", index).as_ref()), name.as_ref());
+    }
+}
+
+fn connect_dropdown_choose_microphone(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+    dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
+        match state.borrow_mut().pa_stream {
+            Some(ref mut stream) => {stream.stop().ok();},
+            _ => {}
+        }
+        let selected_mic = match dropdown.get_active_id().and_then(|id| id.parse().ok()) {
+            Some(mic) => mic,
+            None => {return;}
+        };
+        let stream = ::audio::start_listening(&state.borrow().pa, selected_mic, mic_sender.clone()).ok();
+        if stream.is_none() {
+            writeln!(io::stderr(), "Failed to open audio channel").ok();
+        }
+        state.borrow_mut().pa_stream = stream;
+    });
+}
+
+fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender<String>, freq_sender: Sender<Vec<::transforms::FrequencyBucket>>) {
+    thread::spawn(move || {
+        for samples in mic_receiver {
+            let frequency_domain = ::transforms::fft(samples, 44100.0);
+            freq_sender.send(frequency_domain.clone());
+            let fundamental = ::transforms::find_fundamental_frequency(&frequency_domain);
+            let pitch = match fundamental {
+                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
+                None => "".to_string()
+            };
+            pitch_sender.send(pitch).ok();
+        }
+    });
+}
+
+fn setup_pitch_label_callbacks(pitch_label: gtk::Label, pitch_receiver: Receiver<String>) {
     gtk::timeout_add(100, move || {
         let mut pitch = None;
         loop {
@@ -70,65 +135,24 @@ pub fn start_gui() -> Result<(), String> {
         };
         gtk::Continue(true)
     });
-
-    gtk::main();
-    Ok(())
 }
 
-fn create_window(microphones: Vec<(u32, String)>) -> Result<gtk::Builder, String> {
-    let gtk_builder = gtk::Builder::new_from_string(GUI_XML);
-    let window: gtk::Window = try!(
-        gtk_builder.get_object("window")
-                   .ok_or("GUI does not contain an object with id 'window'")
-    );
-    window.set_default_size(300, 300);
-    window.connect_delete_event(|_, _| {
-        gtk::main_quit();
-        Inhibit(false)
-    });
-    window.show_all();
-
-    let dropdown: gtk::ComboBoxText = try!(
-        gtk_builder.get_object("dropdown")
-                   .ok_or("GUI does not contain an object with id 'dropdown'")
-    );
-    set_dropdown_items(&dropdown, microphones);
-
-    Ok(gtk_builder)
-}
-
-fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, String)>) {
-    for (index, name) in microphones {
-        dropdown.append(Some(format!("{}", index).as_ref()), name.as_ref());
-    }
-}
-
-fn connect_dropdown_choose_microphone(gtk_builder: &gtk::Builder, mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
-    let dropdown: gtk::ComboBoxText = gtk_builder.get_object("dropdown").expect("GUI does not contain an object with id 'dropdown'");
-    dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
-        match state.borrow_mut().pa_stream {
-            Some(ref mut stream) => {stream.stop().ok();},
-            _ => {}
+fn setup_drawing_area_callbacks(canvas: gtk::DrawingArea, freq_receiver: Receiver<Vec<::transforms::FrequencyBucket>>) {
+    canvas.connect_draw(move |ref canvas, ref context| {
+        let mut last_signal = Vec::new();
+        loop {
+            let next = freq_receiver.try_recv().ok();
+            if next.is_none() {
+                break;
+            }
+            last_signal = next.unwrap();
         }
-        let selected_mic = dropdown.get_active_id().and_then(|id| id.parse().ok()).expect("Dropdown did not change to a valid value");
-        let stream = ::audio::start_listening(&state.borrow().pa, selected_mic, mic_sender.clone()).ok();
-        if stream.is_none() {
-            writeln!(io::stderr(), "Failed to open audio channel").ok();
-        }
-        state.borrow_mut().pa_stream = stream;
-    });
-}
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender<String>) {
-    thread::spawn(move || {
-        for samples in mic_receiver {
-            let frequency_domain = ::transforms::fft(samples, 44100.0);
-            let fundamental = ::transforms::find_fundamental_frequency(&frequency_domain);
-            let pitch = match fundamental {
-                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
-                None => "".to_string()
-            };
-            pitch_sender.send(pitch).ok();
-        }
+        context.new_path();
+        context.move_to(0.0, 0.0);
+        context.line_to(canvas.get_allocated_width() as f64, canvas.get_allocated_height() as f64);
+        context.stroke();
+        
+        gtk::Inhibit(false)
     });
 }
