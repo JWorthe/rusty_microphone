@@ -79,6 +79,9 @@ with a time delay.
 *** TODO Real-time updating graph of frequency spectrum
 This is mostly for debugging purposes, but having a component that a
 debugging graph can be put into may be useful.
+
+I'm drawing something now at least. It still needs things like axis
+labels to be useful.
 *** TODO Real-time updating graphical representation of fundamental frequency
 We have a label so far, but a label isn't exactly a nice thing to
 watch while playing.
