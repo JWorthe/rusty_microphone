@@ -13,7 +13,7 @@ impl FrequencyBucket {
     }
 }
 
-pub fn fft(input: Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
+pub fn fft(input: &Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
     let frames = input.len();
     let mean_input = input.iter().sum::<f64>()/input.len() as f64;
     
@@ -48,6 +48,35 @@ pub fn find_fundamental_frequency(frequency_domain: &Vec<FrequencyBucket>) -> Op
     Some(max_bucket.ave_freq())
 }
 
+pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
+    let mut correlation = Vec::with_capacity(input.len());
+    for offset in 0..input.len() {
+        let mut c = 0.0;
+        for i in 0..input.len()-offset {
+            let j = i+offset;
+            c += input[i] * input[j];
+        }
+        correlation.push(c);
+    }
+
+    //at offset = 0, we have union, so we want to remove that peak
+    for offset in 1..correlation.len() {
+        if correlation[offset-1] < correlation[offset] {
+            break;
+        }
+        correlation[offset-1] = 0.0;
+    }
+
+    let peak = correlation.iter()
+        .enumerate()
+        .fold((0, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
+
+    let (peak_index, _) = peak;
+    
+    let peak_period = peak_index as f64 / sample_rate;
+    Some(peak_period.recip())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,10 +103,10 @@ mod tests {
     
     #[test]
     fn fft_on_sine_wave() {
-        let frequency = 10000.0 as f64; //10KHz
+        let frequency = 440.0 as f64; //concert A
         
         let samples = sample_sinusoud(1.0, frequency, 0.0);
-        let frequency_domain = fft(samples, SAMPLE_RATE);
+        let frequency_domain = fft(&samples, SAMPLE_RATE);
         let fundamental = find_fundamental_frequency(&frequency_domain).unwrap();
 
         assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
@@ -86,16 +115,41 @@ mod tests {
     #[test]
     fn fft_on_two_sine_waves() {
         //Unfortunately, real signals won't be this neat
-        let samples1k = sample_sinusoud(2.0, 1000.0, 0.0);
-        let samples2k = sample_sinusoud(1.0, 10000.0, 0.0);
-        let expected_fundamental = 1000.0;
+        let samples1a = sample_sinusoud(2.0, 440.0, 0.0);
+        let samples2a = sample_sinusoud(1.0, 880.0, 0.0);
+        let expected_fundamental = 440.0;
         
-        let samples = samples1k.iter().zip(samples2k.iter())
+        let samples = samples1a.iter().zip(samples2a.iter())
             .map(|(a, b)| a+b)
             .collect();
-        let frequency_domain = fft(samples, SAMPLE_RATE);
+        let frequency_domain = fft(&samples, SAMPLE_RATE);
         
         let fundamental = find_fundamental_frequency(&frequency_domain).unwrap();
+
+        assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
+    }
+
+    #[test]
+    fn correlation_on_sine_wave() {
+        let frequency = 440.0 as f64; //concert A
+        
+        let samples = sample_sinusoud(1.0, frequency, 0.0);
+        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).unwrap();
+        assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
+    }
+
+    #[test]
+    fn correlation_on_two_sine_waves() {
+        //Unfortunately, real signals won't be this neat
+        let samples1a = sample_sinusoud(2.0, 440.0, 0.0);
+        let samples2a = sample_sinusoud(1.0, 880.0, 0.0);
+        let expected_fundamental = 440.0;
+        
+        let samples = samples1a.iter().zip(samples2a.iter())
+            .map(|(a, b)| a+b)
+            .collect();
+
+        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).unwrap();
 
         assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
     }
@@ -120,9 +174,12 @@ pub fn hz_to_pitch(hz: f64) -> String {
     let midi_number = 69.0 + 12.0 * (hz / 440.0).log2();
     //midi_number of 0 is C-1.
 
-    let rounded_pitch = midi_number.round() as usize;
-    let name = pitch_names[rounded_pitch%pitch_names.len()].to_string();
-    let octave = rounded_pitch / pitch_names.len() - 1; //0 is C-1
+    let rounded_pitch = midi_number.round() as i32;
+    let name = pitch_names[rounded_pitch as usize % pitch_names.len()].to_string();
+    let octave = rounded_pitch / pitch_names.len() as i32 - 1; //0 is C-1
+    if octave < 0 {
+        return "< C1".to_string();
+    }
 
     let mut cents = ((midi_number * 100.0).round() % 100.0) as i32;
     if cents >= 50 {
