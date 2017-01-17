@@ -12,13 +12,15 @@ struct RustyUi {
     window: gtk::Window,
     dropdown: gtk::ComboBoxText,
     pitch_label: gtk::Label,
-    freq_chart: gtk::DrawingArea
+    freq_chart: gtk::DrawingArea,
+    correlation_chart: gtk::DrawingArea
 }
 
 struct ApplicationState {
     pa: pa::PortAudio,
     pa_stream: Option<pa::Stream<pa::NonBlocking, pa::Input<f32>>>,
     freq_spectrum: Vec<::transforms::FrequencyBucket>,
+    correlation: Vec<f64>,
     ui: RustyUi
 }
 
@@ -32,6 +34,7 @@ pub fn start_gui() -> Result<(), String> {
         pa: pa,
         pa_stream: None,
         freq_spectrum: Vec::new(),
+        correlation: Vec::new(),
         ui: create_window(microphones)
     }));
 
@@ -40,12 +43,14 @@ pub fn start_gui() -> Result<(), String> {
     let (mic_sender, mic_receiver) = channel();
     let (pitch_sender, pitch_receiver) = channel();
     let (freq_sender, freq_receiver) = channel();
+    let (correlation_sender, correlation_receiver) = channel();
 
     connect_dropdown_choose_microphone(mic_sender, state.clone());
     
-    start_processing_audio(mic_receiver, pitch_sender, freq_sender);
+    start_processing_audio(mic_receiver, pitch_sender, freq_sender, correlation_sender);
     setup_pitch_label_callbacks(pitch_receiver, state.clone());
-    setup_drawing_area_callbacks(freq_receiver, state.clone());
+    setup_freq_drawing_area_callbacks(freq_receiver, state.clone());
+    setup_correlation_drawing_area_callbacks(correlation_receiver, state.clone());
 
     gtk::main();
     Ok(())
@@ -72,6 +77,12 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     let freq_chart = gtk::DrawingArea::new();
     freq_chart.set_size_request(600, 400);
     layout_box.add(&freq_chart);
+    freq_chart.set_no_show_all(true);
+
+    let correlation_chart = gtk::DrawingArea::new();
+    correlation_chart.set_size_request(600, 400);
+    layout_box.add(&correlation_chart);
+    correlation_chart.set_no_show_all(true);
 
     window.show_all();
     
@@ -79,7 +90,8 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
         window: window,
         dropdown: dropdown,
         pitch_label: pitch_label,
-        freq_chart: freq_chart
+        freq_chart: freq_chart,
+        correlation_chart: correlation_chart
     }
 }
 
@@ -109,11 +121,14 @@ fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f64>>, state: Rc<Re
     });
 }
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender<String>, freq_sender: Sender<Vec<::transforms::FrequencyBucket>>) {
+fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender<String>, freq_sender: Sender<Vec<::transforms::FrequencyBucket>>, correlation_sender: Sender<Vec<f64>>) {
     thread::spawn(move || {
         for samples in mic_receiver {
-            let frequency_domain = ::transforms::fft(&samples, 44100.0);
-            freq_sender.send(frequency_domain.clone()).ok();
+            //let frequency_domain = ::transforms::fft(&samples, 44100.0);
+            //freq_sender.send(frequency_domain).ok();
+
+            //let correlation = ::transforms::correlation(&samples);
+            //correlation_sender.send(correlation).ok();
             
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, 44100.0);
             let pitch = match fundamental {
@@ -144,7 +159,7 @@ fn setup_pitch_label_callbacks(pitch_receiver: Receiver<String>, state: Rc<RefCe
     });
 }
 
-fn setup_drawing_area_callbacks(spectrum_receiver: Receiver<Vec<::transforms::FrequencyBucket>>, state: Rc<RefCell<ApplicationState>>) {
+fn setup_freq_drawing_area_callbacks(spectrum_receiver: Receiver<Vec<::transforms::FrequencyBucket>>, state: Rc<RefCell<ApplicationState>>) {
     setup_frequency_spectrum_callback(spectrum_receiver, state.clone());
 
     let outer_state = state.clone();
@@ -157,7 +172,7 @@ fn setup_drawing_area_callbacks(spectrum_receiver: Receiver<Vec<::transforms::Fr
         let len = spectrum.len() as f64;
         
         context.new_path();
-        context.move_to(0.0, 0.0);
+        context.move_to(0.0, height);
         
         for (i, bucket) in spectrum.iter().enumerate() {
             let x = i as f64 * width / len;
@@ -184,6 +199,59 @@ fn setup_frequency_spectrum_callback(spectrum_receiver: Receiver<Vec<::transform
         match spectrum {
             Some(spectrum) => {
                 state.borrow_mut().freq_spectrum = spectrum;
+                state.borrow().ui.freq_chart.queue_draw();
+            },
+            None => {}
+        };
+        gtk::Continue(true)
+    });
+}
+
+fn setup_correlation_drawing_area_callbacks(correlation_receiver: Receiver<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+    setup_correlation_callback(correlation_receiver, state.clone());
+
+    let outer_state = state.clone();
+    let ref canvas = outer_state.borrow().ui.correlation_chart;
+    canvas.connect_draw(move |ref canvas, ref context| {
+        let ref correlation = state.borrow().correlation;
+        if correlation.len() == 0 {
+            return gtk::Inhibit(false);
+        }
+        
+        let width = canvas.get_allocated_width() as f64;
+        let height = canvas.get_allocated_height() as f64;
+        let max = correlation[0];
+        let len = correlation.len() as f64;
+        
+        context.new_path();
+        context.move_to(0.0, height);
+        
+        for (i, val) in correlation.iter().enumerate() {
+            let x = i as f64 * width / len;
+            let y = height - (val * height / max);
+            context.line_to(x, y);
+        }
+        
+        context.stroke();
+        
+        gtk::Inhibit(false)
+    });
+}
+
+fn setup_correlation_callback(correlation_receiver: Receiver<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+    gtk::timeout_add(100, move || {
+        let mut correlation = None;
+        loop {
+            let next = correlation_receiver.try_recv().ok();
+            if next.is_none() {
+                break;
+            }
+            correlation = next;
+        }
+        match correlation {
+            Some(correlation) => {
+                state.borrow_mut().correlation = correlation;
+                state.borrow().ui.correlation_chart.queue_draw();
             },
             None => {}
         };

@@ -48,7 +48,7 @@ pub fn find_fundamental_frequency(frequency_domain: &Vec<FrequencyBucket>) -> Op
     Some(max_bucket.ave_freq())
 }
 
-pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
+pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
     let mut correlation = Vec::with_capacity(input.len());
     for offset in 0..input.len() {
         let mut c = 0.0;
@@ -58,6 +58,11 @@ pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64
         }
         correlation.push(c);
     }
+    correlation
+}
+
+pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
+    let mut correlation = correlation(&input);
 
     //at offset = 0, we have union, so we want to remove that peak
     for offset in 1..correlation.len() {
