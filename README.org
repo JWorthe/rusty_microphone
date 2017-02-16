@@ -70,18 +70,17 @@ src_sh{cargo test}
 *** DONE Start listening on a selected microphone, and let other plugins process the signal.
 *** DONE Function for finding frequency spectrum
 *** TODO Function for finding fundamental frequencies, expressed as a note and amount sharp/flat
-There is an implementation here that works for sinusoids in test
-cases, but really does not work for real signals. This may need a
-different method of finding frequencies, such as using correlation
-with a time delay.
+There is an implementation here that works kind of ok for most
+signals, although it could stand to be more accurate.
+
 ** GUI
 *** DONE Opens a window with a drop down of available microphones
-*** TODO Real-time updating graph of frequency spectrum
+*** DONE Real-time updating graph of frequency spectrum
 This is mostly for debugging purposes, but having a component that a
 debugging graph can be put into may be useful.
 
 I'm drawing something now at least. It still needs things like axis
-labels to be useful.
+labels to be really useful, but it's something.
 *** TODO Real-time updating graphical representation of fundamental frequency
 We have a label so far, but a label isn't exactly a nice thing to
 watch while playing.
