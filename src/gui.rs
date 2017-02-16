@@ -3,13 +3,14 @@ use gtk::prelude::*;
 use std::cell::RefCell;
 use portaudio as pa;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::io;
 use std::io::Write;
 use std::thread;
 use std::sync::mpsc::*;
 
 struct RustyUi {
-    window: gtk::Window,
     dropdown: gtk::ComboBoxText,
     pitch_label: gtk::Label,
     freq_chart: gtk::DrawingArea,
@@ -19,9 +20,13 @@ struct RustyUi {
 struct ApplicationState {
     pa: pa::PortAudio,
     pa_stream: Option<pa::Stream<pa::NonBlocking, pa::Input<f32>>>,
-    freq_spectrum: Vec<::transforms::FrequencyBucket>,
-    correlation: Vec<f64>,
     ui: RustyUi
+}
+
+struct CrossThreadState {
+    pitch: String,
+    freq_spectrum: Vec<::transforms::FrequencyBucket>,
+    correlation: Vec<f64>
 }
 
 pub fn start_gui() -> Result<(), String> {
@@ -33,24 +38,23 @@ pub fn start_gui() -> Result<(), String> {
     let state = Rc::new(RefCell::new(ApplicationState {
         pa: pa,
         pa_stream: None,
-        freq_spectrum: Vec::new(),
-        correlation: Vec::new(),
         ui: create_window(microphones)
     }));
 
-    //let ui = create_window(microphones);
+    let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
+        pitch: String::new(),
+        freq_spectrum: Vec::new(),
+        correlation: Vec::new()
+    }));
     
     let (mic_sender, mic_receiver) = channel();
-    let (pitch_sender, pitch_receiver) = channel();
-    let (freq_sender, freq_receiver) = channel();
-    let (correlation_sender, correlation_receiver) = channel();
 
     connect_dropdown_choose_microphone(mic_sender, state.clone());
     
-    start_processing_audio(mic_receiver, pitch_sender, freq_sender, correlation_sender);
-    setup_pitch_label_callbacks(pitch_receiver, state.clone());
-    setup_freq_drawing_area_callbacks(freq_receiver, state.clone());
-    setup_correlation_drawing_area_callbacks(correlation_receiver, state.clone());
+    start_processing_audio(mic_receiver, cross_thread_state.clone());
+    setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
+    setup_freq_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
+    setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
 
     gtk::main();
     Ok(())
@@ -77,17 +81,14 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     let freq_chart = gtk::DrawingArea::new();
     freq_chart.set_size_request(600, 400);
     layout_box.add(&freq_chart);
-    freq_chart.set_no_show_all(true);
 
     let correlation_chart = gtk::DrawingArea::new();
     correlation_chart.set_size_request(600, 400);
     layout_box.add(&correlation_chart);
-    correlation_chart.set_no_show_all(true);
 
     window.show_all();
     
     RustyUi {
-        window: window,
         dropdown: dropdown,
         pitch_label: pitch_label,
         freq_chart: freq_chart,
@@ -121,51 +122,59 @@ fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f64>>, state: Rc<Re
     });
 }
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, pitch_sender: Sender<String>, freq_sender: Sender<Vec<::transforms::FrequencyBucket>>, correlation_sender: Sender<Vec<f64>>) {
+fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
-        for samples in mic_receiver {
-            //let frequency_domain = ::transforms::fft(&samples, 44100.0);
-            //freq_sender.send(frequency_domain).ok();
+        loop {
+            let mut samples = None;
+            loop {
+                let next = mic_receiver.try_recv().ok();
+                if next.is_none() {
+                    break;
+                }
+                samples = next;
+            }
+            let samples = match samples {
+                Some(samples) => samples,
+                None => {continue;}
+            };
 
-            //let correlation = ::transforms::correlation(&samples);
-            //correlation_sender.send(correlation).ok();
-            
+            let frequency_domain = ::transforms::fft(&samples, 44100.0);
+            let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, 44100.0);
             let pitch = match fundamental {
                 Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
                 None => "".to_string()
             };
-            pitch_sender.send(pitch).ok();
+
+            match cross_thread_state.write() {
+                Ok(mut state) => {
+                    state.pitch = pitch;
+                    state.freq_spectrum = frequency_domain;
+                    state.correlation = correlation;
+                },
+                Err(_) => {}
+            };
         }
     });
 }
 
-fn setup_pitch_label_callbacks(pitch_receiver: Receiver<String>, state: Rc<RefCell<ApplicationState>>) {
+fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     gtk::timeout_add(100, move || {
-        let mut pitch = None;
-        loop {
-            let next = pitch_receiver.try_recv().ok();
-            if next.is_none() {
-                break;
-            }
-            pitch = next;
-        }
-        match pitch {
-            Some(pitch) => {state.borrow().ui.pitch_label.set_label(pitch.as_ref());},
-            None => {}
-        };
-        state.borrow().ui.freq_chart.queue_draw();
+        let ref pitch = cross_thread_state.read().unwrap().pitch;
+        let ref ui = state.borrow().ui;
+        ui.pitch_label.set_label(pitch.as_ref());
+        ui.correlation_chart.queue_draw();
+        ui.freq_chart.queue_draw();
+
         gtk::Continue(true)
     });
 }
 
-fn setup_freq_drawing_area_callbacks(spectrum_receiver: Receiver<Vec<::transforms::FrequencyBucket>>, state: Rc<RefCell<ApplicationState>>) {
-    setup_frequency_spectrum_callback(spectrum_receiver, state.clone());
-
+fn setup_freq_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.freq_chart;
     canvas.connect_draw(move |ref canvas, ref context| {
-        let ref spectrum = state.borrow().freq_spectrum;
+        let ref spectrum = cross_thread_state.read().unwrap().freq_spectrum;
         let width = canvas.get_allocated_width() as f64;
         let height = canvas.get_allocated_height() as f64;
         let max = spectrum.iter().map(|x| x.intensity).fold(0.0, |max, x| if max > x { max } else { x });
@@ -186,34 +195,11 @@ fn setup_freq_drawing_area_callbacks(spectrum_receiver: Receiver<Vec<::transform
     });
 }
 
-fn setup_frequency_spectrum_callback(spectrum_receiver: Receiver<Vec<::transforms::FrequencyBucket>>, state: Rc<RefCell<ApplicationState>>) {
-    gtk::timeout_add(100, move || {
-        let mut spectrum = None;
-        loop {
-            let next = spectrum_receiver.try_recv().ok();
-            if next.is_none() {
-                break;
-            }
-            spectrum = next;
-        }
-        match spectrum {
-            Some(spectrum) => {
-                state.borrow_mut().freq_spectrum = spectrum;
-                state.borrow().ui.freq_chart.queue_draw();
-            },
-            None => {}
-        };
-        gtk::Continue(true)
-    });
-}
-
-fn setup_correlation_drawing_area_callbacks(correlation_receiver: Receiver<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
-    setup_correlation_callback(correlation_receiver, state.clone());
-
+fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.correlation_chart;
     canvas.connect_draw(move |ref canvas, ref context| {
-        let ref correlation = state.borrow().correlation;
+        let ref correlation = cross_thread_state.read().unwrap().correlation;
         if correlation.len() == 0 {
             return gtk::Inhibit(false);
         }
@@ -238,23 +224,3 @@ fn setup_correlation_drawing_area_callbacks(correlation_receiver: Receiver<Vec<f
     });
 }
 
-fn setup_correlation_callback(correlation_receiver: Receiver<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
-    gtk::timeout_add(100, move || {
-        let mut correlation = None;
-        loop {
-            let next = correlation_receiver.try_recv().ok();
-            if next.is_none() {
-                break;
-            }
-            correlation = next;
-        }
-        match correlation {
-            Some(correlation) => {
-                state.borrow_mut().correlation = correlation;
-                state.borrow().ui.correlation_chart.queue_draw();
-            },
-            None => {}
-        };
-        gtk::Continue(true)
-    });
-}
