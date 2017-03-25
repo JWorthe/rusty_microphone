@@ -13,6 +13,7 @@ use std::sync::mpsc::*;
 struct RustyUi {
     dropdown: gtk::ComboBoxText,
     pitch_label: gtk::Label,
+    pitch_error_indicator: gtk::DrawingArea,
     freq_chart: gtk::DrawingArea,
     correlation_chart: gtk::DrawingArea
 }
@@ -25,6 +26,7 @@ struct ApplicationState {
 
 struct CrossThreadState {
     pitch: String,
+    error: f64,
     freq_spectrum: Vec<::transforms::FrequencyBucket>,
     correlation: Vec<f64>
 }
@@ -43,6 +45,7 @@ pub fn start_gui() -> Result<(), String> {
 
     let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
         pitch: String::new(),
+        error: 0.0,
         freq_spectrum: Vec::new(),
         correlation: Vec::new()
     }));
@@ -53,6 +56,7 @@ pub fn start_gui() -> Result<(), String> {
     
     start_processing_audio(mic_receiver, cross_thread_state.clone());
     setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
+    setup_pitch_error_indicator_callbacks(state.clone(), cross_thread_state.clone());
     setup_freq_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
     setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
 
@@ -78,6 +82,10 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     let pitch_label = gtk::Label::new(None);
     layout_box.add(&pitch_label);
 
+    let pitch_error_indicator = gtk::DrawingArea::new();
+    pitch_error_indicator.set_size_request(600, 50);
+    layout_box.add(&pitch_error_indicator);
+    
     let freq_chart = gtk::DrawingArea::new();
     freq_chart.set_size_request(600, 400);
     layout_box.add(&freq_chart);
@@ -91,6 +99,7 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     RustyUi {
         dropdown: dropdown,
         pitch_label: pitch_label,
+        pitch_error_indicator: pitch_error_indicator,
         freq_chart: freq_chart,
         correlation_chart: correlation_chart
     }
@@ -141,9 +150,9 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
             let frequency_domain = ::transforms::fft(&samples, 44100.0);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, 44100.0);
-            let pitch = match fundamental {
-                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
-                None => "".to_string()
+            let (pitch, error) = match fundamental {
+                Some(fundamental) => (::transforms::hz_to_pitch(fundamental), ::transforms::hz_to_cents_error(fundamental)),
+                None => ("".to_string(), 0.0)
             };
 
             match cross_thread_state.write() {
@@ -151,6 +160,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
                     state.pitch = pitch;
                     state.freq_spectrum = frequency_domain;
                     state.correlation = correlation;
+                    state.error = error
                 },
                 Err(_) => {}
             };
@@ -163,12 +173,37 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
         let ref pitch = cross_thread_state.read().unwrap().pitch;
         let ref ui = state.borrow().ui;
         ui.pitch_label.set_label(pitch.as_ref());
+        ui.pitch_error_indicator.queue_draw();
         ui.correlation_chart.queue_draw();
         ui.freq_chart.queue_draw();
 
         gtk::Continue(true)
     });
 }
+
+fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+    let outer_state = state.clone();
+    let ref canvas = outer_state.borrow().ui.pitch_error_indicator;
+    canvas.connect_draw(move |ref canvas, ref context| {
+        let error = cross_thread_state.read().unwrap().error;
+        let width = canvas.get_allocated_width() as f64;
+        let midpoint = width / 2.0;
+        let height = canvas.get_allocated_height() as f64;
+
+        //flat on the left
+        context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error/50.0} else {0.0});
+        context.rectangle(0.0, 0.0, midpoint, height);
+        context.fill();
+
+        //sharp on the right
+        context.set_source_rgb(if error > 0.0 {error/50.0} else {0.0}, 0.0, 0.0);
+        context.rectangle(midpoint, 0.0, width, height);
+        context.fill();
+        
+        gtk::Inhibit(false)
+    });
+}
+
 
 fn setup_freq_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();

@@ -77,9 +77,7 @@ pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64
         .fold((0, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
 
     let (peak_index, _) = peak;
-    
-    let peak_period = peak_index as f64 / sample_rate;
-    Some(peak_period.recip())
+    Some(sample_rate / peak_index as f64)
 }
 
 #[cfg(test)]
@@ -160,6 +158,21 @@ mod tests {
     }
 }
 
+pub fn hz_to_midi_number(hz: f64) -> f64 {
+    69.0 + 12.0 * (hz / 440.0).log2()
+}
+
+pub fn hz_to_cents_error(hz: f64) -> f64 {
+    let midi_number = hz_to_midi_number(hz);
+    let cents = (midi_number * 100.0).round() % 100.0;
+    if cents >= 50.0 {
+        cents - 100.0
+    }
+    else {
+        cents
+    }
+}
+
 pub fn hz_to_pitch(hz: f64) -> String {
     let pitch_names = [
         "C",
@@ -176,7 +189,7 @@ pub fn hz_to_pitch(hz: f64) -> String {
         "B"
     ];
 
-    let midi_number = 69.0 + 12.0 * (hz / 440.0).log2();
+    let midi_number = hz_to_midi_number(hz);
     //midi_number of 0 is C-1.
 
     let rounded_pitch = midi_number.round() as i32;
@@ -188,6 +201,7 @@ pub fn hz_to_pitch(hz: f64) -> String {
 
     let mut cents = ((midi_number * 100.0).round() % 100.0) as i32;
     if cents >= 50 {
+        //don't need to adjust pitch here, that's already been done by the round above
         cents -= 100;
     }
     
