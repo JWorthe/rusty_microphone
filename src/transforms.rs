@@ -227,3 +227,12 @@ fn c4_is_correct() {
 fn f5_is_correct() {
     assert_eq!(hz_to_pitch(698.46), "F5 +0");
 }
+
+
+pub fn align_to_rising_edge(samples: &Vec<f64>) -> Vec<f64> {
+    samples.iter()
+        .skip_while(|x| !x.is_sign_negative())
+        .skip_while(|x| x.is_sign_negative())
+        .cloned()
+        .collect()
+}

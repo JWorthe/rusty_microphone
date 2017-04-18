@@ -14,6 +14,7 @@ struct RustyUi {
     dropdown: gtk::ComboBoxText,
     pitch_label: gtk::Label,
     pitch_error_indicator: gtk::DrawingArea,
+    oscilloscope_chart: gtk::DrawingArea,
     freq_chart: gtk::DrawingArea,
     correlation_chart: gtk::DrawingArea
 }
@@ -27,6 +28,7 @@ struct ApplicationState {
 struct CrossThreadState {
     pitch: String,
     error: f64,
+    signal: Vec<f64>,
     freq_spectrum: Vec<::transforms::FrequencyBucket>,
     correlation: Vec<f64>
 }
@@ -46,6 +48,7 @@ pub fn start_gui() -> Result<(), String> {
     let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
         pitch: String::new(),
         error: 0.0,
+        signal: Vec::new(),
         freq_spectrum: Vec::new(),
         correlation: Vec::new()
     }));
@@ -57,6 +60,7 @@ pub fn start_gui() -> Result<(), String> {
     start_processing_audio(mic_receiver, cross_thread_state.clone());
     setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
     setup_pitch_error_indicator_callbacks(state.clone(), cross_thread_state.clone());
+    setup_oscilloscope_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
     setup_freq_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
     setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
 
@@ -85,13 +89,17 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     let pitch_error_indicator = gtk::DrawingArea::new();
     pitch_error_indicator.set_size_request(600, 50);
     layout_box.add(&pitch_error_indicator);
+
+    let oscilloscope_chart = gtk::DrawingArea::new();
+    oscilloscope_chart.set_size_request(600, 250);
+    layout_box.add(&oscilloscope_chart);
     
     let freq_chart = gtk::DrawingArea::new();
-    freq_chart.set_size_request(600, 400);
+    freq_chart.set_size_request(600, 250);
     layout_box.add(&freq_chart);
 
     let correlation_chart = gtk::DrawingArea::new();
-    correlation_chart.set_size_request(600, 400);
+    correlation_chart.set_size_request(600, 250);
     layout_box.add(&correlation_chart);
 
     window.show_all();
@@ -100,6 +108,7 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
         dropdown: dropdown,
         pitch_label: pitch_label,
         pitch_error_indicator: pitch_error_indicator,
+        oscilloscope_chart: oscilloscope_chart,
         freq_chart: freq_chart,
         correlation_chart: correlation_chart
     }
@@ -147,6 +156,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
                 None => {continue;}
             };
 
+            let signal = ::transforms::align_to_rising_edge(&samples);
             let frequency_domain = ::transforms::fft(&samples, 44100.0);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, 44100.0);
@@ -158,6 +168,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
             match cross_thread_state.write() {
                 Ok(mut state) => {
                     state.pitch = pitch;
+                    state.signal = signal;
                     state.freq_spectrum = frequency_domain;
                     state.correlation = correlation;
                     state.error = error
@@ -174,6 +185,7 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
         let ref ui = state.borrow().ui;
         ui.pitch_label.set_label(pitch.as_ref());
         ui.pitch_error_indicator.queue_draw();
+        ui.oscilloscope_chart.queue_draw();
         ui.correlation_chart.queue_draw();
         ui.freq_chart.queue_draw();
 
@@ -204,6 +216,31 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
     });
 }
 
+fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+    let outer_state = state.clone();
+    let ref canvas = outer_state.borrow().ui.oscilloscope_chart;
+    canvas.connect_draw(move |ref canvas, ref context| {
+        let ref signal = cross_thread_state.read().unwrap().signal;
+        let width = canvas.get_allocated_width() as f64;
+        let len = 512.0; //Set as a constant so signal won't change size based on zero point.
+        let height = canvas.get_allocated_height() as f64;
+        let mid_height = height / 2.0;
+        let max = signal.iter().map(|x| x.abs()).fold(0.0, |max, x| if max > x { max } else { x });
+
+        context.new_path();
+        context.move_to(0.0, mid_height);
+
+        for (i, intensity) in signal.iter().enumerate() {
+            let x = i as f64 * width / len;
+            let y = mid_height - (intensity * mid_height / max);
+            context.line_to(x, y);
+        }
+
+        context.stroke();
+        
+        gtk::Inhibit(false)
+    });
+}
 
 fn setup_freq_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
