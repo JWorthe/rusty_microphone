@@ -16,7 +16,10 @@ struct RustyUi {
     pitch_error_indicator: gtk::DrawingArea,
     oscilloscope_chart: gtk::DrawingArea,
     freq_chart: gtk::DrawingArea,
-    correlation_chart: gtk::DrawingArea
+    correlation_chart: gtk::DrawingArea,
+    oscilloscope_toggle_button: gtk::Button,
+    freq_toggle_button: gtk::Button,
+    correlation_toggle_button: gtk::Button
 }
 
 struct ApplicationState {
@@ -64,6 +67,8 @@ pub fn start_gui() -> Result<(), String> {
     setup_freq_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
     setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
 
+    setup_chart_visibility_callbacks(state.clone());
+    
     gtk::main();
     Ok(())
 }
@@ -76,31 +81,44 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
         Inhibit(false)
     });
 
-    let layout_box = gtk::Box::new(gtk::Orientation::Vertical, 5);
-    window.add(&layout_box);
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    window.add(&vbox);
 
+    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+    vbox.add(&hbox);
     let dropdown = gtk::ComboBoxText::new();
+    dropdown.set_hexpand(true);
     set_dropdown_items(&dropdown, microphones);
-    layout_box.add(&dropdown);
+    hbox.add(&dropdown);
+    
+    let oscilloscope_toggle_button = gtk::Button::new_with_label("Osc");
+    hbox.add(&oscilloscope_toggle_button);
+    let freq_toggle_button = gtk::Button::new_with_label("FFT");
+    hbox.add(&freq_toggle_button);
+    let correlation_toggle_button = gtk::Button::new_with_label("Corr");
+    hbox.add(&correlation_toggle_button);
 
     let pitch_label = gtk::Label::new(None);
-    layout_box.add(&pitch_label);
+    vbox.add(&pitch_label);
 
     let pitch_error_indicator = gtk::DrawingArea::new();
     pitch_error_indicator.set_size_request(600, 50);
-    layout_box.add(&pitch_error_indicator);
+    vbox.add(&pitch_error_indicator);
 
     let oscilloscope_chart = gtk::DrawingArea::new();
     oscilloscope_chart.set_size_request(600, 250);
-    layout_box.add(&oscilloscope_chart);
+    oscilloscope_chart.set_vexpand(true);
+    vbox.add(&oscilloscope_chart);
     
     let freq_chart = gtk::DrawingArea::new();
     freq_chart.set_size_request(600, 250);
-    layout_box.add(&freq_chart);
+    freq_chart.set_vexpand(true);
+    vbox.add(&freq_chart);
 
     let correlation_chart = gtk::DrawingArea::new();
     correlation_chart.set_size_request(600, 250);
-    layout_box.add(&correlation_chart);
+    correlation_chart.set_vexpand(true);
+    vbox.add(&correlation_chart);
 
     window.show_all();
     
@@ -110,7 +128,10 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
         pitch_error_indicator: pitch_error_indicator,
         oscilloscope_chart: oscilloscope_chart,
         freq_chart: freq_chart,
-        correlation_chart: correlation_chart
+        correlation_chart: correlation_chart,
+        oscilloscope_toggle_button: oscilloscope_toggle_button,
+        freq_toggle_button: freq_toggle_button,
+        correlation_toggle_button: correlation_toggle_button
     }
 }
 
@@ -296,3 +317,27 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
     });
 }
 
+fn setup_chart_visibility_callbacks(state: Rc<RefCell<ApplicationState>>) {
+    let outer_state = state.clone();
+    let ref oscilloscope_toggle_button = outer_state.borrow().ui.oscilloscope_toggle_button;
+    let ref freq_toggle_button = outer_state.borrow().ui.freq_toggle_button;
+    let ref correlation_toggle_button = outer_state.borrow().ui.correlation_toggle_button;
+
+    let oscilloscope_state = state.clone();
+    oscilloscope_toggle_button.connect_clicked(move |_| {
+        let ref chart = oscilloscope_state.borrow().ui.oscilloscope_chart;
+        chart.set_visible(!chart.get_visible());
+    });
+    
+    let freq_state = state.clone();
+    freq_toggle_button.connect_clicked(move |_| {
+        let ref chart = freq_state.borrow().ui.freq_chart;
+        chart.set_visible(!chart.get_visible());
+    });
+
+    let correlation_state = state.clone();
+    correlation_toggle_button.connect_clicked(move |_| {
+        let ref chart = correlation_state.borrow().ui.correlation_chart;
+        chart.set_visible(!chart.get_visible());
+    });
+}
