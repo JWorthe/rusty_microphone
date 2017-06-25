@@ -29,6 +29,7 @@ struct ApplicationState {
 }
 
 struct CrossThreadState {
+    fundamental_frequency: f64,
     pitch: String,
     error: f64,
     signal: Vec<f64>,
@@ -49,6 +50,7 @@ pub fn start_gui() -> Result<(), String> {
     }));
 
     let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
+        fundamental_frequency: 1.0,
         pitch: String::new(),
         error: 0.0,
         signal: Vec::new(),
@@ -188,6 +190,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
 
             match cross_thread_state.write() {
                 Ok(mut state) => {
+                    state.fundamental_frequency = fundamental.unwrap_or(1.0);
                     state.pitch = pitch;
                     state.signal = signal;
                     state.freq_spectrum = frequency_domain;
@@ -201,7 +204,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
 }
 
 fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
-    gtk::timeout_add(100, move || {
+    gtk::timeout_add(16, move || {
         let ref pitch = cross_thread_state.read().unwrap().pitch;
         let ref ui = state.borrow().ui;
         ui.pitch_label.set_label(pitch.as_ref());
@@ -292,6 +295,8 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.correlation_chart;
     canvas.connect_draw(move |ref canvas, ref context| {
+        let ref fundamental = cross_thread_state.read().unwrap().fundamental_frequency;
+        
         let ref correlation = cross_thread_state.read().unwrap().correlation;
         if correlation.len() == 0 {
             return gtk::Inhibit(false);
@@ -301,16 +306,28 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
         let height = canvas.get_allocated_height() as f64;
         let max = correlation[0];
         let len = correlation.len() as f64;
+
+        //draw zero
+        context.new_path();
+        context.move_to(0.0, height/2.0);
+        context.line_to(width, height/2.0);
+        context.stroke();
         
+        //draw the distribution
         context.new_path();
         context.move_to(0.0, height);
-        
         for (i, val) in correlation.iter().enumerate() {
             let x = i as f64 * width / len;
-            let y = height - (val * height / max);
+            let y = height/2.0 - (val * height / max / 2.0);
             context.line_to(x, y);
-        }
-        
+        }        
+        context.stroke();
+
+        //draw the fundamental
+        context.new_path();
+        let fundamental_x = 44100.0 / fundamental * width / len;
+        context.move_to(fundamental_x, 0.0);
+        context.line_to(fundamental_x, height);
         context.stroke();
         
         gtk::Inhibit(false)

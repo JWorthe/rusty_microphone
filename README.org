@@ -81,6 +81,6 @@ debugging graph can be put into may be useful.
 
 I'm drawing something now at least. It still needs things like axis
 labels to be really useful, but it's something.
-*** TODO Real-time updating graphical representation of fundamental frequency
+*** DONE Real-time updating graphical representation of fundamental frequency
 We have a label so far, but a label isn't exactly a nice thing to
 watch while playing.
