@@ -10,6 +10,8 @@ use std::io::Write;
 use std::thread;
 use std::sync::mpsc::*;
 
+const FPS: u32 = 30;
+
 struct RustyUi {
     dropdown: gtk::ComboBoxText,
     pitch_label: gtk::Label,
@@ -180,9 +182,9 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
             };
 
             let signal = ::transforms::align_to_rising_edge(&samples);
-            let frequency_domain = ::transforms::fft(&samples, 44100.0);
+            let frequency_domain = ::transforms::fft(&samples, ::audio::SAMPLE_RATE);
             let correlation = ::transforms::correlation(&samples);
-            let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, 44100.0);
+            let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
             let (pitch, error) = match fundamental {
                 Some(fundamental) => (::transforms::hz_to_pitch(fundamental), ::transforms::hz_to_cents_error(fundamental)),
                 None => ("".to_string(), 0.0)
@@ -204,7 +206,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
 }
 
 fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
-    gtk::timeout_add(16, move || {
+    gtk::timeout_add(1000/FPS, move || {
         let ref pitch = cross_thread_state.read().unwrap().pitch;
         let ref ui = state.borrow().ui;
         ui.pitch_label.set_label(pitch.as_ref());
@@ -325,7 +327,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
 
         //draw the fundamental
         context.new_path();
-        let fundamental_x = 44100.0 / fundamental * width / len;
+        let fundamental_x = ::audio::SAMPLE_RATE / fundamental * width / len;
         context.move_to(fundamental_x, 0.0);
         context.line_to(fundamental_x, height);
         context.stroke();
