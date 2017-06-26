@@ -62,22 +62,45 @@ pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
 }
 
 pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
-    let mut correlation = correlation(&input);
+    let correlation = correlation(&input);
 
-    //at offset = 0, we have union, so we want to remove that peak
-    for offset in 1..correlation.len() {
-        if correlation[offset-1] < correlation[offset] {
+    let mut first_peak_width = 0;
+    for offset in 0..correlation.len() {
+        if correlation[offset] < 0.0 {
+            first_peak_width = offset;
             break;
         }
-        correlation[offset-1] = 0.0;
+    }
+    if first_peak_width == 0 {
+        return None;
     }
 
     let peak = correlation.iter()
         .enumerate()
-        .fold((0, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
+        .skip(first_peak_width)
+        .fold((first_peak_width, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
 
     let (peak_index, _) = peak;
     Some(sample_rate / peak_index as f64)
+}
+
+fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
+    if x < 0.0 {
+        println!("<0");
+        correlation[0]
+    }
+    else if x >= correlation.len() as f64 {
+        println!(">len");
+        correlation[correlation.len()-1]
+    }
+    else {
+        let x0 = x.floor();
+        let y0 = correlation[x0 as usize];
+        let x1 = x.ceil();
+        let y1 = correlation[x1 as usize];
+
+        (y0*(x1-x) + y1*(x-x0)) / (x1-x0)
+    }
 }
 
 #[cfg(test)]
@@ -155,6 +178,11 @@ mod tests {
         let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).unwrap();
 
         assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
+    }
+
+    #[test]
+    fn interpolate_half_way() {
+        assert_eq!(0.5, interpolate(&vec!(0.0, 1.0), 0.5))
     }
 }
 
