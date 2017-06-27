@@ -81,7 +81,43 @@ pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64
         .fold((first_peak_width, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
 
     let (peak_index, _) = peak;
-    Some(sample_rate / peak_index as f64)
+
+    let refined_peak_index = refine_fundamentals(&correlation, peak_index as f64);
+    
+    Some(sample_rate / refined_peak_index)
+}
+
+fn refine_fundamentals(correlation: &Vec<f64>, initial_guess: f64) -> f64 {
+    let mut low_bound = initial_guess - 0.5;
+    let mut high_bound = initial_guess + 0.5;
+
+    for _ in 0..5 {
+        let data_points = 2 * correlation.len() / high_bound.ceil() as usize;
+        let low_guess = score_guess(&correlation, low_bound, data_points);
+        let high_guess = score_guess(&correlation, high_bound, data_points);
+
+        let midpoint = (low_bound + high_bound) / 2.0;
+        if high_guess > low_guess {
+            low_bound = midpoint;
+        }
+        else {
+            high_bound = midpoint;
+        }
+    }
+    (low_bound + high_bound) / 2.0
+}
+
+fn score_guess(correlation: &Vec<f64>, period: f64, data_points: usize) -> f64 {
+    let mut score = 0.0;
+    for i in 0..data_points {
+        if i % 2 == 0 {
+            score += i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
+        }
+        else {
+            score -= i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
+        }
+    }
+    score
 }
 
 fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
@@ -99,7 +135,12 @@ fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
         let x1 = x.ceil();
         let y1 = correlation[x1 as usize];
 
-        (y0*(x1-x) + y1*(x-x0)) / (x1-x0)
+        if (x0 as usize == x1 as usize) {
+            y0
+        }
+        else {
+            (y0*(x1-x) + y1*(x-x0)) / (x1-x0)
+        }
     }
 }
 
