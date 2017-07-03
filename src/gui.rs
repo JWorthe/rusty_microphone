@@ -106,7 +106,7 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     vbox.add(&pitch_label);
 
     let pitch_error_indicator = gtk::DrawingArea::new();
-    pitch_error_indicator.set_size_request(600, 50);
+    pitch_error_indicator.set_size_request(600, 70);
     vbox.add(&pitch_error_indicator);
 
     let oscilloscope_chart = gtk::DrawingArea::new();
@@ -224,18 +224,28 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
     let ref canvas = outer_state.borrow().ui.pitch_error_indicator;
     canvas.connect_draw(move |ref canvas, ref context| {
         let error = cross_thread_state.read().unwrap().error;
+        
         let width = canvas.get_allocated_width() as f64;
         let midpoint = width / 2.0;
-        let height = canvas.get_allocated_height() as f64;
 
+        let line_indicator_height = 20.0;
+        let color_indicator_height = canvas.get_allocated_height() as f64 - line_indicator_height;
+
+
+        let error_line_x = midpoint + error * midpoint / 50.0;
+        context.new_path();
+        context.move_to(error_line_x, 0.0);
+        context.line_to(error_line_x, line_indicator_height);
+        context.stroke();
+        
         //flat on the left
         context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error/50.0} else {0.0});
-        context.rectangle(0.0, 0.0, midpoint, height);
+        context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
         context.fill();
 
         //sharp on the right
         context.set_source_rgb(if error > 0.0 {error/50.0} else {0.0}, 0.0, 0.0);
-        context.rectangle(midpoint, 0.0, width, height);
+        context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
         context.fill();
         
         gtk::Inhibit(false)
@@ -251,7 +261,7 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
         let len = 512.0; //Set as a constant so signal won't change size based on zero point.
         let height = canvas.get_allocated_height() as f64;
         let mid_height = height / 2.0;
-        let max = signal.iter().map(|x| x.abs()).fold(0.0, |max, x| if max > x { max } else { x });
+        let max = 1.0;
 
         context.new_path();
         context.move_to(0.0, mid_height);

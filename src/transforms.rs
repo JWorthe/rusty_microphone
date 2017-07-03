@@ -13,16 +13,20 @@ impl FrequencyBucket {
     }
 }
 
-pub fn fft(input: &Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
-    let frames = input.len();
+pub fn remove_mean_offset(input: &Vec<f64>) -> Vec<f64> {
     let mean_input = input.iter().sum::<f64>()/input.len() as f64;
-    
-    let mut intensities = input.iter().map(|x|x-mean_input).collect::<Vec<_>>();
-    let plan = dft::Plan::new(dft::Operation::Forward, frames);
-    dft::transform(&mut intensities, &plan);
+    input.iter().map(|x|x-mean_input).collect()
+}
 
+pub fn fft(input: &Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
+    let mut intensities = remove_mean_offset(&input);
+    
+    let frames = intensities.len();
+    let plan = dft::Plan::new(dft::Operation::Forward, frames);
     let frequency_resolution = sample_rate / 2.0 / frames as f64;
     
+    dft::transform(&mut intensities, &plan);
+
     intensities.iter().enumerate().map(|(index, &value)| {
         let index = index as f64;
         FrequencyBucket {
@@ -31,21 +35,6 @@ pub fn fft(input: &Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
             intensity: value
         }
     }).collect()
-}
-
-pub fn find_fundamental_frequency(frequency_domain: &Vec<FrequencyBucket>) -> Option<f64> {
-    //TODO look at all significant frequencies, find fundamental
-    //TODO return None is none of them are significant
-    let positive_buckets = frequency_domain.iter().filter(|x| x.intensity > 0.0).cloned().collect::<Vec<_>>();
-    let average_intensity = positive_buckets.iter().map(|x| x.intensity).sum::<f64>() / frequency_domain.len() as f64;
-    let significant_buckets = positive_buckets.iter().filter(|x| x.intensity > average_intensity).cloned().collect::<Vec<_>>();
-    
-    let max_bucket = significant_buckets.iter()
-        .fold(None as Option<::transforms::FrequencyBucket>, |max, next|
-              if max.is_none() || max.clone().unwrap().intensity < next.intensity { Some(next.clone()) } else { max }
-        ).unwrap();
-
-    Some(max_bucket.ave_freq())
 }
 
 pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
@@ -62,7 +51,13 @@ pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
 }
 
 pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
-    let correlation = correlation(&input);
+    let intensities = remove_mean_offset(&input);
+    
+    if intensities.iter().all(|&x| x.abs() < 0.1) {
+        return None;
+    }
+    
+    let correlation = correlation(&intensities);
 
     let mut first_peak_width = 0;
     for offset in 0..correlation.len() {
@@ -83,8 +78,13 @@ pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64
     let (peak_index, _) = peak;
 
     let refined_peak_index = refine_fundamentals(&correlation, peak_index as f64);
-    
-    Some(sample_rate / refined_peak_index)
+
+    if is_noise(&correlation, refined_peak_index) {
+        None
+    }
+    else {
+        Some(sample_rate / refined_peak_index)
+    }
 }
 
 fn refine_fundamentals(correlation: &Vec<f64>, initial_guess: f64) -> f64 {
@@ -107,15 +107,19 @@ fn refine_fundamentals(correlation: &Vec<f64>, initial_guess: f64) -> f64 {
     (low_bound + high_bound) / 2.0
 }
 
+fn is_noise(correlation: &Vec<f64>, fundamental: f64) -> bool {
+    let value_at_point = interpolate(&correlation, fundamental);
+    let score_data_points = 2 * correlation.len() / fundamental.ceil() as usize;
+    let score = score_guess(&correlation, fundamental, score_data_points);
+
+    value_at_point > 2.0*score
+}
+
 fn score_guess(correlation: &Vec<f64>, period: f64, data_points: usize) -> f64 {
     let mut score = 0.0;
-    for i in 0..data_points {
-        if i % 2 == 0 {
-            score += i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
-        }
-        else {
-            score -= i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
-        }
+    for i in 1..data_points {
+        let expected_sign = if i % 2 == 0 { 1.0 } else { -1.0 };
+        score += expected_sign * 0.5 * i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
     }
     score
 }
@@ -135,7 +139,7 @@ fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
         let x1 = x.ceil();
         let y1 = correlation[x1 as usize];
 
-        if (x0 as usize == x1 as usize) {
+        if x0 as usize == x1 as usize {
             y0
         }
         else {
@@ -244,18 +248,18 @@ pub fn hz_to_cents_error(hz: f64) -> f64 {
 
 pub fn hz_to_pitch(hz: f64) -> String {
     let pitch_names = [
-        "C",
+        "C ",
         "C#",
-        "D",
+        "D ",
         "Eb",
-        "E",
-        "F",
+        "E ",
+        "F ",
         "F#",
-        "G",
+        "G ",
         "G#",
-        "A",
+        "A ",
         "Bb",
-        "B"
+        "B "
     ];
 
     let midi_number = hz_to_midi_number(hz);
@@ -273,8 +277,9 @@ pub fn hz_to_pitch(hz: f64) -> String {
         //don't need to adjust pitch here, that's already been done by the round above
         cents -= 100;
     }
-    
-    format!("{}{} {:+}", name, octave, cents)
+
+    format!("{}{}", name, octave)
+//    format!("{}{} {:+}", name, octave, cents)
 }
 
 #[test]
