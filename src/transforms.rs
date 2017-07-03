@@ -1,40 +1,6 @@
-extern crate dft;
-
-#[derive(Clone, Debug)]
-pub struct FrequencyBucket {
-    pub min_freq: f64,
-    pub max_freq: f64,
-    pub intensity: f64
-}
-
-impl FrequencyBucket {
-    pub fn ave_freq(&self) -> f64 {
-        (self.min_freq + self.max_freq) / 2.0
-    }
-}
-
 pub fn remove_mean_offset(input: &Vec<f64>) -> Vec<f64> {
     let mean_input = input.iter().sum::<f64>()/input.len() as f64;
     input.iter().map(|x|x-mean_input).collect()
-}
-
-pub fn fft(input: &Vec<f64>, sample_rate: f64) -> Vec<FrequencyBucket> {
-    let mut intensities = remove_mean_offset(&input);
-    
-    let frames = intensities.len();
-    let plan = dft::Plan::new(dft::Operation::Forward, frames);
-    let frequency_resolution = sample_rate / 2.0 / frames as f64;
-    
-    dft::transform(&mut intensities, &plan);
-
-    intensities.iter().enumerate().map(|(index, &value)| {
-        let index = index as f64;
-        FrequencyBucket {
-            min_freq: index * frequency_resolution,
-            max_freq: (index+1.0) * frequency_resolution,
-            intensity: value
-        }
-    }).collect()
 }
 
 pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
@@ -173,34 +139,6 @@ mod tests {
     }
     
     #[test]
-    fn fft_on_sine_wave() {
-        let frequency = 440.0 as f64; //concert A
-        
-        let samples = sample_sinusoud(1.0, frequency, 0.0);
-        let frequency_domain = fft(&samples, SAMPLE_RATE);
-        let fundamental = find_fundamental_frequency(&frequency_domain).unwrap();
-
-        assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
-    }
-
-    #[test]
-    fn fft_on_two_sine_waves() {
-        //Unfortunately, real signals won't be this neat
-        let samples1a = sample_sinusoud(2.0, 440.0, 0.0);
-        let samples2a = sample_sinusoud(1.0, 880.0, 0.0);
-        let expected_fundamental = 440.0;
-        
-        let samples = samples1a.iter().zip(samples2a.iter())
-            .map(|(a, b)| a+b)
-            .collect();
-        let frequency_domain = fft(&samples, SAMPLE_RATE);
-        
-        let fundamental = find_fundamental_frequency(&frequency_domain).unwrap();
-
-        assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
-    }
-
-    #[test]
     fn correlation_on_sine_wave() {
         let frequency = 440.0 as f64; //concert A
         
@@ -272,14 +210,7 @@ pub fn hz_to_pitch(hz: f64) -> String {
         return "< C1".to_string();
     }
 
-    let mut cents = ((midi_number * 100.0).round() % 100.0) as i32;
-    if cents >= 50 {
-        //don't need to adjust pitch here, that's already been done by the round above
-        cents -= 100;
-    }
-
     format!("{}{}", name, octave)
-//    format!("{}{} {:+}", name, octave, cents)
 }
 
 #[test]
@@ -304,7 +235,8 @@ fn f5_is_correct() {
 
 
 pub fn align_to_rising_edge(samples: &Vec<f64>) -> Vec<f64> {
-    samples.iter()
+    remove_mean_offset(&samples)
+        .iter()
         .skip_while(|x| !x.is_sign_negative())
         .skip_while(|x| x.is_sign_negative())
         .cloned()

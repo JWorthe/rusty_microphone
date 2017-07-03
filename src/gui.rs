@@ -17,10 +17,8 @@ struct RustyUi {
     pitch_label: gtk::Label,
     pitch_error_indicator: gtk::DrawingArea,
     oscilloscope_chart: gtk::DrawingArea,
-    freq_chart: gtk::DrawingArea,
     correlation_chart: gtk::DrawingArea,
     oscilloscope_toggle_button: gtk::Button,
-    freq_toggle_button: gtk::Button,
     correlation_toggle_button: gtk::Button
 }
 
@@ -35,7 +33,6 @@ struct CrossThreadState {
     pitch: String,
     error: f64,
     signal: Vec<f64>,
-    freq_spectrum: Vec<::transforms::FrequencyBucket>,
     correlation: Vec<f64>
 }
 
@@ -56,7 +53,6 @@ pub fn start_gui() -> Result<(), String> {
         pitch: String::new(),
         error: 0.0,
         signal: Vec::new(),
-        freq_spectrum: Vec::new(),
         correlation: Vec::new()
     }));
     
@@ -68,7 +64,6 @@ pub fn start_gui() -> Result<(), String> {
     setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
     setup_pitch_error_indicator_callbacks(state.clone(), cross_thread_state.clone());
     setup_oscilloscope_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
-    setup_freq_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
     setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
 
     setup_chart_visibility_callbacks(state.clone());
@@ -97,8 +92,6 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     
     let oscilloscope_toggle_button = gtk::Button::new_with_label("Osc");
     hbox.add(&oscilloscope_toggle_button);
-    let freq_toggle_button = gtk::Button::new_with_label("FFT");
-    hbox.add(&freq_toggle_button);
     let correlation_toggle_button = gtk::Button::new_with_label("Corr");
     hbox.add(&correlation_toggle_button);
 
@@ -114,11 +107,6 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     oscilloscope_chart.set_vexpand(true);
     vbox.add(&oscilloscope_chart);
     
-    let freq_chart = gtk::DrawingArea::new();
-    freq_chart.set_size_request(600, 250);
-    freq_chart.set_vexpand(true);
-    vbox.add(&freq_chart);
-
     let correlation_chart = gtk::DrawingArea::new();
     correlation_chart.set_size_request(600, 250);
     correlation_chart.set_vexpand(true);
@@ -131,10 +119,8 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
         pitch_label: pitch_label,
         pitch_error_indicator: pitch_error_indicator,
         oscilloscope_chart: oscilloscope_chart,
-        freq_chart: freq_chart,
         correlation_chart: correlation_chart,
         oscilloscope_toggle_button: oscilloscope_toggle_button,
-        freq_toggle_button: freq_toggle_button,
         correlation_toggle_button: correlation_toggle_button
     }
 }
@@ -182,7 +168,6 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
             };
 
             let signal = ::transforms::align_to_rising_edge(&samples);
-            let frequency_domain = ::transforms::fft(&samples, ::audio::SAMPLE_RATE);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
             let (pitch, error) = match fundamental {
@@ -195,7 +180,6 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
                     state.fundamental_frequency = fundamental.unwrap_or(1.0);
                     state.pitch = pitch;
                     state.signal = signal;
-                    state.freq_spectrum = frequency_domain;
                     state.correlation = correlation;
                     state.error = error
                 },
@@ -213,7 +197,6 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
         ui.pitch_error_indicator.queue_draw();
         ui.oscilloscope_chart.queue_draw();
         ui.correlation_chart.queue_draw();
-        ui.freq_chart.queue_draw();
 
         gtk::Continue(true)
     });
@@ -278,31 +261,6 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
     });
 }
 
-fn setup_freq_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
-    let outer_state = state.clone();
-    let ref canvas = outer_state.borrow().ui.freq_chart;
-    canvas.connect_draw(move |ref canvas, ref context| {
-        let ref spectrum = cross_thread_state.read().unwrap().freq_spectrum;
-        let width = canvas.get_allocated_width() as f64;
-        let height = canvas.get_allocated_height() as f64;
-        let max = spectrum.iter().map(|x| x.intensity).fold(0.0, |max, x| if max > x { max } else { x });
-        let len = spectrum.len() as f64;
-        
-        context.new_path();
-        context.move_to(0.0, height);
-        
-        for (i, bucket) in spectrum.iter().enumerate() {
-            let x = i as f64 * width / len;
-            let y = height - (bucket.intensity * height / max);
-            context.line_to(x, y);
-        }
-        
-        context.stroke();
-        
-        gtk::Inhibit(false)
-    });
-}
-
 fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.correlation_chart;
@@ -349,18 +307,11 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
 fn setup_chart_visibility_callbacks(state: Rc<RefCell<ApplicationState>>) {
     let outer_state = state.clone();
     let ref oscilloscope_toggle_button = outer_state.borrow().ui.oscilloscope_toggle_button;
-    let ref freq_toggle_button = outer_state.borrow().ui.freq_toggle_button;
     let ref correlation_toggle_button = outer_state.borrow().ui.correlation_toggle_button;
 
     let oscilloscope_state = state.clone();
     oscilloscope_toggle_button.connect_clicked(move |_| {
         let ref chart = oscilloscope_state.borrow().ui.oscilloscope_chart;
-        chart.set_visible(!chart.get_visible());
-    });
-    
-    let freq_state = state.clone();
-    freq_toggle_button.connect_clicked(move |_| {
-        let ref chart = freq_state.borrow().ui.freq_chart;
         chart.set_visible(!chart.get_visible());
     });
 
