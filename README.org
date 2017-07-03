@@ -1,5 +1,7 @@
 #+TITLE: Rusty Microphone
 
+[[https://travis-ci.org/JWorthe/rusty_microphone][https://travis-ci.org/JWorthe/rusty_microphone.svg?branch=master]]
+
 * Summary
 
 The goal of this project is to create a dashboard for real-time
