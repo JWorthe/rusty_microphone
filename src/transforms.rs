@@ -207,7 +207,7 @@ pub fn hz_to_pitch(hz: f64) -> String {
     let name = pitch_names[rounded_pitch as usize % pitch_names.len()].to_string();
     let octave = rounded_pitch / pitch_names.len() as i32 - 1; //0 is C-1
     if octave < 0 {
-        return "< C1".to_string();
+        return "< C 1".to_string();
     }
 
     format!("{}{}", name, octave)
@@ -215,22 +215,22 @@ pub fn hz_to_pitch(hz: f64) -> String {
 
 #[test]
 fn a4_is_correct() {
-    assert_eq!(hz_to_pitch(440.0), "A4 +0");
+    assert_eq!(hz_to_pitch(440.0), "A 4");
 }
 
 #[test]
 fn a2_is_correct() {
-    assert_eq!(hz_to_pitch(110.0), "A2 +0");
+    assert_eq!(hz_to_pitch(110.0), "A 2");
 }
 
 #[test]
 fn c4_is_correct() {
-    assert_eq!(hz_to_pitch(261.63), "C4 +0");
+    assert_eq!(hz_to_pitch(261.63), "C 4");
 }
 
 #[test]
 fn f5_is_correct() {
-    assert_eq!(hz_to_pitch(698.46), "F5 +0");
+    assert_eq!(hz_to_pitch(698.46), "F 5");
 }
 
 
