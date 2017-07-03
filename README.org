@@ -11,24 +11,30 @@ The other goal of this project is to give me a platform for learning
 Rust, and various other technologies that I do not get to touch in my
 day to day work.
 
-NB this is a work in progress, and does not provide any actual value
-yet.
-
 * Getting started
 
 This is a Rust project. The latest version of the Rust compiler and
 Cargo are available from your system's package manager, or from
 https://www.rust-lang.org/.
 
-To compile the project
-src_sh{cargo build}
+To compile the project:
 
-To compile and run
-src_sh{cargo run}
+#+BEGIN_SRC sh
+cargo build
+#+END_SRC
+
+To compile and run:
+
+#+BEGIN_SRC sh
+cargo run
+#+END_SRC
 
 To compile and run unit tests. Use this as the CI build command if
 setting up a CI server.
-src_sh{cargo test}
+
+#+BEGIN_SRC sh
+cargo test
+#+END_SRC
 
 * Project structure
 
@@ -53,34 +59,3 @@ src_sh{cargo test}
   presentation logic, so that the processing can be reused
   independently.
 
-* Tasks
-** Project setup
-*** DONE Cargo build process
-- This is probably already in place, since it's 'just use Cargo', but
-  it needs to be in the docs mentioned below.
-*** DONE Getting started docs
-- For myself two months later. This doubles as revision exercise on
-  how a Rust project can be laid out.
-*** DONE CI build
-- it's only me on the project, so manually triggered with a script and
-  not actually on a CI server is fine. This is probably just 'use
-  Cargo test', but again, formalize and in the docs above.
-** Audio interfaces
-*** DONE Read the list of microphones.
-*** DONE Start listening on a selected microphone, and let other plugins process the signal.
-*** DONE Function for finding frequency spectrum
-*** TODO Function for finding fundamental frequencies, expressed as a note and amount sharp/flat
-There is an implementation here that works kind of ok for most
-signals, although it could stand to be more accurate.
-
-** GUI
-*** DONE Opens a window with a drop down of available microphones
-*** DONE Real-time updating graph of frequency spectrum
-This is mostly for debugging purposes, but having a component that a
-debugging graph can be put into may be useful.
-
-I'm drawing something now at least. It still needs things like axis
-labels to be really useful, but it's something.
-*** DONE Real-time updating graphical representation of fundamental frequency
-We have a label so far, but a label isn't exactly a nice thing to
-watch while playing.
