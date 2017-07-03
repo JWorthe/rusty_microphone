@@ -114,6 +114,10 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
 
     window.show_all();
     
+    // correlation chart is only really useful for debugging, so it
+    // makes sense to have it default to being hidden
+    correlation_chart.set_visible(false);
+    
     RustyUi {
         dropdown: dropdown,
         pitch_label: pitch_label,
@@ -155,12 +159,10 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
     thread::spawn(move || {
         loop {
             let mut samples = None;
-            loop {
-                let next = mic_receiver.try_recv().ok();
-                if next.is_none() {
-                    break;
-                }
-                samples = next;
+
+            // ignore all pending samples until we get to the most recent one
+            while let Ok(next_samples) = mic_receiver.try_recv() {
+                samples = Some(next_samples);
             }
             let samples = match samples {
                 Some(samples) => samples,
@@ -181,9 +183,11 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
                     state.pitch = pitch;
                     state.signal = signal;
                     state.correlation = correlation;
-                    state.error = error
+                    state.error = error;
                 },
-                Err(_) => {}
+                Err(err) => {
+                    println!("Error updating cross thread state: {}", err);
+                }
             };
         }
     });
