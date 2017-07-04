@@ -143,7 +143,7 @@ mod tests {
         let frequency = 440.0 as f64; //concert A
         
         let samples = sample_sinusoud(1.0, frequency, 0.0);
-        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).unwrap();
+        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
         assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
     }
 
@@ -158,7 +158,7 @@ mod tests {
             .map(|(a, b)| a+b)
             .collect();
 
-        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).unwrap();
+        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
 
         assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
     }

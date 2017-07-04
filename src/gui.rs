@@ -29,9 +29,9 @@ struct ApplicationState {
 }
 
 struct CrossThreadState {
-    fundamental_frequency: f64,
+    fundamental_frequency: Option<f64>,
     pitch: String,
-    error: f64,
+    error: Option<f64>,
     signal: Vec<f64>,
     correlation: Vec<f64>
 }
@@ -49,9 +49,9 @@ pub fn start_gui() -> Result<(), String> {
     }));
 
     let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
-        fundamental_frequency: 1.0,
+        fundamental_frequency: None,
         pitch: String::new(),
-        error: 0.0,
+        error: None,
         signal: Vec::new(),
         correlation: Vec::new()
     }));
@@ -172,14 +172,15 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
             let signal = ::transforms::align_to_rising_edge(&samples);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
-            let (pitch, error) = match fundamental {
-                Some(fundamental) => (::transforms::hz_to_pitch(fundamental), ::transforms::hz_to_cents_error(fundamental)),
-                None => ("".to_string(), 0.0)
+            let pitch = match fundamental {
+                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
+                None => String::new()
             };
+            let error = fundamental.map(::transforms::hz_to_cents_error);
 
             match cross_thread_state.write() {
                 Ok(mut state) => {
-                    state.fundamental_frequency = fundamental.unwrap_or(1.0);
+                    state.fundamental_frequency = fundamental;
                     state.pitch = pitch;
                     state.signal = signal;
                     state.correlation = correlation;
@@ -195,12 +196,14 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: 
 
 fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     gtk::timeout_add(1000/FPS, move || {
-        let ref pitch = cross_thread_state.read().unwrap().pitch;
         let ref ui = state.borrow().ui;
-        ui.pitch_label.set_label(pitch.as_ref());
-        ui.pitch_error_indicator.queue_draw();
-        ui.oscilloscope_chart.queue_draw();
-        ui.correlation_chart.queue_draw();
+        if let Ok(cross_thread_state) = cross_thread_state.read() {
+            let ref pitch = cross_thread_state.pitch;
+            ui.pitch_label.set_label(pitch.as_ref());
+            ui.pitch_error_indicator.queue_draw();
+            ui.oscilloscope_chart.queue_draw();
+            ui.correlation_chart.queue_draw();
+        }
 
         gtk::Continue(true)
     });
@@ -210,30 +213,30 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.pitch_error_indicator;
     canvas.connect_draw(move |ref canvas, ref context| {
-        let error = cross_thread_state.read().unwrap().error;
-        
         let width = canvas.get_allocated_width() as f64;
         let midpoint = width / 2.0;
 
         let line_indicator_height = 20.0;
         let color_indicator_height = canvas.get_allocated_height() as f64 - line_indicator_height;
 
+        if let Ok(Some(error)) = cross_thread_state.read().map(|state| state.error) {
+            let error_line_x = midpoint + error * midpoint / 50.0;
+            context.new_path();
+            context.move_to(error_line_x, 0.0);
+            context.line_to(error_line_x, line_indicator_height);
+            context.stroke();
+            
+            
+            //flat on the left
+            context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error/50.0} else {0.0});
+            context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
+            context.fill();
 
-        let error_line_x = midpoint + error * midpoint / 50.0;
-        context.new_path();
-        context.move_to(error_line_x, 0.0);
-        context.line_to(error_line_x, line_indicator_height);
-        context.stroke();
-        
-        //flat on the left
-        context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error/50.0} else {0.0});
-        context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
-        context.fill();
-
-        //sharp on the right
-        context.set_source_rgb(if error > 0.0 {error/50.0} else {0.0}, 0.0, 0.0);
-        context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
-        context.fill();
+            //sharp on the right
+            context.set_source_rgb(if error > 0.0 {error/50.0} else {0.0}, 0.0, 0.0);
+            context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
+            context.fill();
+        }
         
         gtk::Inhibit(false)
     });
@@ -243,23 +246,25 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.oscilloscope_chart;
     canvas.connect_draw(move |ref canvas, ref context| {
-        let ref signal = cross_thread_state.read().unwrap().signal;
-        let width = canvas.get_allocated_width() as f64;
-        let len = 512.0; //Set as a constant so signal won't change size based on zero point.
-        let height = canvas.get_allocated_height() as f64;
-        let mid_height = height / 2.0;
-        let max = 1.0;
+        if let Ok(cross_thread_state) = cross_thread_state.read() {
+            let ref signal = cross_thread_state.signal;
+            let width = canvas.get_allocated_width() as f64;
+            let len = 512.0; //Set as a constant so signal won't change size based on zero point.
+            let height = canvas.get_allocated_height() as f64;
+            let mid_height = height / 2.0;
+            let max = 1.0;
 
-        context.new_path();
-        context.move_to(0.0, mid_height);
+            context.new_path();
+            context.move_to(0.0, mid_height);
 
-        for (i, intensity) in signal.iter().enumerate() {
-            let x = i as f64 * width / len;
-            let y = mid_height - (intensity * mid_height / max);
-            context.line_to(x, y);
+            for (i, intensity) in signal.iter().enumerate() {
+                let x = i as f64 * width / len;
+                let y = mid_height - (intensity * mid_height / max);
+                context.line_to(x, y);
+            }
+
+            context.stroke();
         }
-
-        context.stroke();
         
         gtk::Inhibit(false)
     });
@@ -269,40 +274,41 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
     let outer_state = state.clone();
     let ref canvas = outer_state.borrow().ui.correlation_chart;
     canvas.connect_draw(move |ref canvas, ref context| {
-        let ref fundamental = cross_thread_state.read().unwrap().fundamental_frequency;
-        
-        let ref correlation = cross_thread_state.read().unwrap().correlation;
-        if correlation.len() == 0 {
-            return gtk::Inhibit(false);
-        }
-        
         let width = canvas.get_allocated_width() as f64;
         let height = canvas.get_allocated_height() as f64;
-        let max = correlation[0];
-        let len = correlation.len() as f64;
-
+        
         //draw zero
         context.new_path();
         context.move_to(0.0, height/2.0);
         context.line_to(width, height/2.0);
         context.stroke();
-        
-        //draw the distribution
-        context.new_path();
-        context.move_to(0.0, height);
-        for (i, val) in correlation.iter().enumerate() {
-            let x = i as f64 * width / len;
-            let y = height/2.0 - (val * height / max / 2.0);
-            context.line_to(x, y);
-        }        
-        context.stroke();
 
-        //draw the fundamental
-        context.new_path();
-        let fundamental_x = ::audio::SAMPLE_RATE / fundamental * width / len;
-        context.move_to(fundamental_x, 0.0);
-        context.line_to(fundamental_x, height);
-        context.stroke();
+        if let Ok(cross_thread_state) = cross_thread_state.read() {
+            let ref correlation = cross_thread_state.correlation;
+            let len = correlation.len() as f64;
+            let max = match correlation.first() {
+                Some(&c) => c,
+                None => 1.0
+            };
+            
+            context.new_path();
+            context.move_to(0.0, height);
+            for (i, val) in correlation.iter().enumerate() {
+                let x = i as f64 * width / len;
+                let y = height/2.0 - (val * height / max / 2.0);
+                context.line_to(x, y);
+            }        
+            context.stroke();
+
+            //draw the fundamental
+            if let Some(fundamental) = cross_thread_state.fundamental_frequency {
+                context.new_path();
+                let fundamental_x = ::audio::SAMPLE_RATE / fundamental * width / len;
+                context.move_to(fundamental_x, 0.0);
+                context.line_to(fundamental_x, height);
+                context.stroke();
+            }
+        }
         
         gtk::Inhibit(false)
     });
