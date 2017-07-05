@@ -24,6 +24,11 @@ pub fn get_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Err
     Ok(list)
 }
 
+pub fn get_default_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
+    let pa::DeviceIndex(default_input_index) = pa.default_input_device()?;
+    Ok(default_input_index)
+}
+
 #[test]
 #[ignore]
 fn get_device_list_returns_devices() {
@@ -35,8 +40,13 @@ fn get_device_list_returns_devices() {
     assert!(devices.len() > 0);
 }
 
+pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
+    let default = get_default_device(&pa)?;
+    start_listening(&pa, default, sender)
+}
+
 pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
-                       sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {    
+                       sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
     let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
     let latency = device_info.default_low_input_latency;
 

@@ -39,13 +39,14 @@ struct CrossThreadState {
 pub fn start_gui() -> Result<(), String> {
     let pa = try!(::audio::init().map_err(|e| e.to_string()));
     let microphones = try!(::audio::get_device_list(&pa).map_err(|e| e.to_string()));
-
+    let default_microphone = try!(::audio::get_default_device(&pa).map_err(|e| e.to_string()));
+    
     try!(gtk::init().map_err(|_| "Failed to initialize GTK."));
 
     let state = Rc::new(RefCell::new(ApplicationState {
         pa: pa,
         pa_stream: None,
-        ui: create_window(microphones)
+        ui: create_window(microphones, default_microphone)
     }));
 
     let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
@@ -72,7 +73,7 @@ pub fn start_gui() -> Result<(), String> {
     Ok(())
 }
 
-fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
+fn create_window(microphones: Vec<(u32, String)>, default_microphone: u32) -> RustyUi {
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Rusty Microphone");
     window.connect_delete_event(|_, _| {
@@ -87,7 +88,7 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     vbox.add(&hbox);
     let dropdown = gtk::ComboBoxText::new();
     dropdown.set_hexpand(true);
-    set_dropdown_items(&dropdown, microphones);
+    set_dropdown_items(&dropdown, microphones, default_microphone);
     hbox.add(&dropdown);
     
     let oscilloscope_toggle_button = gtk::Button::new_with_label("Osc");
@@ -129,30 +130,35 @@ fn create_window(microphones: Vec<(u32, String)>) -> RustyUi {
     }
 }
 
-fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, String)>) {
+fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, String)>, default_mic: u32) {
     for (index, name) in microphones {
         dropdown.append(Some(format!("{}", index).as_ref()), name.as_ref());
     }
+    dropdown.set_active_id(Some(format!("{}", default_mic).as_ref()));
 }
 
 fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
-    let outer_state = state.clone();
-    let ref dropdown = outer_state.borrow().ui.dropdown;
+    let dropdown = state.borrow().ui.dropdown.clone();
+    start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone());
     dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
-        match state.borrow_mut().pa_stream {
-            Some(ref mut stream) => {stream.stop().ok();},
-            _ => {}
-        }
-        let selected_mic = match dropdown.get_active_id().and_then(|id| id.parse().ok()) {
-            Some(mic) => mic,
-            None => {return;}
-        };
-        let stream = ::audio::start_listening(&state.borrow().pa, selected_mic, mic_sender.clone()).ok();
-        if stream.is_none() {
-            writeln!(io::stderr(), "Failed to open audio channel").ok();
-        }
-        state.borrow_mut().pa_stream = stream;
+        start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone())
     });
+}
+
+fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+    match state.borrow_mut().pa_stream {
+        Some(ref mut stream) => {stream.stop().ok();},
+        _ => {}
+    }
+    let selected_mic = match dropdown.get_active_id().and_then(|id| id.parse().ok()) {
+        Some(mic) => mic,
+        None => {return;}
+    };
+    let stream = ::audio::start_listening(&state.borrow().pa, selected_mic, mic_sender).ok();
+    if stream.is_none() {
+        writeln!(io::stderr(), "Failed to open audio channel").ok();
+    }
+    state.borrow_mut().pa_stream = stream;
 }
 
 fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
