@@ -39,7 +39,6 @@ cargo test
 #+END_SRC
 
 * Project structure
-
 ** File Structure
 
 - Dependencies are declared in ~Cargo.toml~
@@ -61,3 +60,12 @@ cargo test
   presentation logic, so that the processing can be reused
   independently.
 
+* System Requirements
+
+I have tested this project and found it to be working on a Linux
+system. It should also work under MacOS.
+
+Unfortunately, Windows is not currently supported. If you wish to
+contribute to adding Windows support, the most useful approach would
+be to take a look at the [[https://github.com/RustAudio/rust-portaudio/issues/71][open issue in rust-portaudio]] for supporting
+Windows in their build script.
