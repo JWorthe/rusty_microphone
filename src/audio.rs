@@ -64,6 +64,7 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
 }
 
 #[test]
+#[ignore] //ignored because TravisCI doesn't have any audio devices to test with
 fn start_listening_returns_successfully() {
     // Just a note on unit tests here, portaudio doesn't seem to
     // respond well to being initialized many times, and starts
