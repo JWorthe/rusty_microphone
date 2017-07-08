@@ -29,11 +29,11 @@ struct ApplicationState {
 }
 
 struct CrossThreadState {
-    fundamental_frequency: Option<f64>,
+    fundamental_frequency: Option<f32>,
     pitch: String,
-    error: Option<f64>,
-    signal: Vec<f64>,
-    correlation: Vec<f64>
+    error: Option<f32>,
+    signal: Vec<f32>,
+    correlation: Vec<f32>
 }
 
 pub fn start_gui() -> Result<(), String> {
@@ -137,7 +137,7 @@ fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, Strin
     dropdown.set_active_id(Some(format!("{}", default_mic).as_ref()));
 }
 
-fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
     let dropdown = state.borrow().ui.dropdown.clone();
     start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone());
     dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
@@ -145,7 +145,7 @@ fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f64>>, state: Rc<Re
     });
 }
 
-fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f64>>, state: Rc<RefCell<ApplicationState>>) {
+fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
     match state.borrow_mut().pa_stream {
         Some(ref mut stream) => {stream.stop().ok();},
         _ => {}
@@ -161,7 +161,7 @@ fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_send
     state.borrow_mut().pa_stream = stream;
 }
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f64>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
         loop {
             let mut samples = None;
@@ -226,7 +226,7 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
         let color_indicator_height = canvas.get_allocated_height() as f64 - line_indicator_height;
 
         if let Ok(Some(error)) = cross_thread_state.read().map(|state| state.error) {
-            let error_line_x = midpoint + error * midpoint / 50.0;
+            let error_line_x = midpoint + error as f64 * midpoint / 50.0;
             context.new_path();
             context.move_to(error_line_x, 0.0);
             context.line_to(error_line_x, line_indicator_height);
@@ -234,12 +234,12 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
             
             
             //flat on the left
-            context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error/50.0} else {0.0});
+            context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error as f64/50.0} else {0.0});
             context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
             context.fill();
 
             //sharp on the right
-            context.set_source_rgb(if error > 0.0 {error/50.0} else {0.0}, 0.0, 0.0);
+            context.set_source_rgb(if error > 0.0 {error as f64/50.0} else {0.0}, 0.0, 0.0);
             context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
             context.fill();
         }
@@ -263,9 +263,9 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
             context.new_path();
             context.move_to(0.0, mid_height);
 
-            for (i, intensity) in signal.iter().enumerate() {
+            for (i, &intensity) in signal.iter().enumerate() {
                 let x = i as f64 * width / len;
-                let y = mid_height - (intensity * mid_height / max);
+                let y = mid_height - (intensity as f64 * mid_height / max);
                 context.line_to(x, y);
             }
 
@@ -293,15 +293,15 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
             let ref correlation = cross_thread_state.correlation;
             let len = correlation.len() as f64;
             let max = match correlation.first() {
-                Some(&c) => c,
+                Some(&c) => c as f64,
                 None => 1.0
             };
             
             context.new_path();
             context.move_to(0.0, height);
-            for (i, val) in correlation.iter().enumerate() {
+            for (i, &val) in correlation.iter().enumerate() {
                 let x = i as f64 * width / len;
-                let y = height/2.0 - (val * height / max / 2.0);
+                let y = height/2.0 - (val as f64 * height / max / 2.0);
                 context.line_to(x, y);
             }        
             context.stroke();
@@ -309,7 +309,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
             //draw the fundamental
             if let Some(fundamental) = cross_thread_state.fundamental_frequency {
                 context.new_path();
-                let fundamental_x = ::audio::SAMPLE_RATE / fundamental * width / len;
+                let fundamental_x = ::audio::SAMPLE_RATE as f64 / fundamental as f64 * width / len;
                 context.move_to(fundamental_x, 0.0);
                 context.line_to(fundamental_x, height);
                 context.stroke();

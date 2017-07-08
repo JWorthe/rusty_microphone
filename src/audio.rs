@@ -3,7 +3,7 @@ use portaudio as pa;
 
 use std::sync::mpsc::*;
 
-pub const SAMPLE_RATE: f64 = 44100.0;
+pub const SAMPLE_RATE: f32 = 44100.0;
 pub const FRAMES: usize = 1024;
 
 pub fn init() -> Result<pa::PortAudio, pa::Error> {
@@ -29,24 +29,13 @@ pub fn get_default_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
     Ok(default_input_index)
 }
 
-#[test]
-#[ignore]
-fn get_device_list_returns_devices() {
-    let pa = init().expect("Could not init portaudio");
-    let devices = get_device_list(&pa).expect("Getting devices had an error");
-
-    // all machines should have at least one input stream, even if
-    // that's just a virtual stream with a name like "default".
-    assert!(devices.len() > 0);
-}
-
-pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
+pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
     let default = get_default_device(&pa)?;
     start_listening(&pa, default, sender)
 }
 
 pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
-                       sender: Sender<Vec<f64>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
+                       sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
     let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
     let latency = device_info.default_low_input_latency;
 
@@ -55,15 +44,17 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
     let input_params = pa::StreamParameters::<f32>::new(pa::DeviceIndex(device_index), 1, true, latency);
 
     // Check that the stream format is supported.
-    try!(pa.is_input_format_supported(input_params, SAMPLE_RATE));
+    try!(pa.is_input_format_supported(input_params, SAMPLE_RATE as f64));
 
     // Construct the settings with which we'll open our stream.
-    let stream_settings = pa::InputStreamSettings::new(input_params, SAMPLE_RATE, FRAMES as u32);
+    let stream_settings = pa::InputStreamSettings::new(input_params, SAMPLE_RATE as f64, FRAMES as u32);
 
     // This callback A callback to pass to the non-blocking stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
-        sender.send(buffer.iter().map(|&s| s as f64).collect()).ok();
-        pa::Continue
+        match sender.send(Vec::from(buffer)) {
+            Ok(_) => pa::Continue,
+            Err(_) => pa::Complete //this happens when receiver is dropped
+        }
     };
 
     let mut stream = try!(pa.open_non_blocking_stream(stream_settings, callback));
@@ -73,11 +64,15 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
 }
 
 #[test]
-#[ignore]
 fn start_listening_returns_successfully() {
+    // Just a note on unit tests here, portaudio doesn't seem to
+    // respond well to being initialized many times, and starts
+    // throwing errors.
     let pa = init().expect("Could not init portaudio");
+
     let devices = get_device_list(&pa).expect("Getting devices had an error");
-    let device = devices.first().expect("Should have at least one device");
+    assert!(devices.len() > 0);
+    
     let (sender, _) = channel();
-    start_listening(&pa, device.0, sender).expect("Error starting listening to first channel");
+    start_listening_default(&pa, sender).expect("Error starting listening to first channel");
 }

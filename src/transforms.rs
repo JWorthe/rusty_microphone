@@ -1,49 +1,43 @@
-pub fn remove_mean_offset(input: &Vec<f64>) -> Vec<f64> {
-    let mean_input = input.iter().sum::<f64>()/input.len() as f64;
-    input.iter().map(|x|x-mean_input).collect()
+pub fn remove_mean_offset(signal: &Vec<f32>) -> Vec<f32> {
+    let mean = signal.iter().sum::<f32>()/signal.len() as f32;
+    signal.iter().map(|x| x - mean).collect()
 }
 
-pub fn correlation(input: &Vec<f64>) -> Vec<f64> {
-    let mut correlation = Vec::with_capacity(input.len());
-    for offset in 0..input.len() {
-        let mut c = 0.0;
-        for i in 0..input.len()-offset {
-            let j = i+offset;
-            c += input[i] * input[j];
-        }
-        correlation.push(c);
-    }
-    correlation
+pub fn correlation(signal: &Vec<f32>) -> Vec<f32> {
+    (0..signal.len()).map(|offset| {
+        signal.iter().take(signal.len() - offset)
+            .zip(signal.iter().skip(offset))
+            .map(|(sig_i, sig_j)| sig_i * sig_j)
+            .sum()
+    }).collect()
 }
 
-pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64) -> Option<f64> {
-    let intensities = remove_mean_offset(&input);
+pub fn find_fundamental_frequency_correlation(signal: &Vec<f32>, sample_rate: f32) -> Option<f32> {
+    let normalized_signal = remove_mean_offset(&signal);
     
-    if intensities.iter().all(|&x| x.abs() < 0.1) {
+    if normalized_signal.iter().all(|&x| x.abs() < 0.1) {
+        // silence
         return None;
     }
     
-    let correlation = correlation(&intensities);
+    let correlation = correlation(&normalized_signal);
 
-    let mut first_peak_width = 0;
-    for offset in 0..correlation.len() {
-        if correlation[offset] < 0.0 {
-            first_peak_width = offset;
-            break;
+    let first_peak_end = match correlation.iter().position(|&c| c < 0.0) {
+        Some(p) => p,
+        None => {
+            // musical signals will drop below 0 at some point
+            return None
         }
-    }
-    if first_peak_width == 0 {
-        return None;
-    }
-
+    };
+    
     let peak = correlation.iter()
         .enumerate()
-        .skip(first_peak_width)
-        .fold((first_peak_width, 0.0 as f64), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
+        .skip(first_peak_end)
+        .fold((first_peak_end, 0.0), |(xi, xmag), (yi, &ymag)| if ymag > xmag { (yi, ymag) } else { (xi, xmag) });
 
     let (peak_index, _) = peak;
 
-    let refined_peak_index = refine_fundamentals(&correlation, peak_index as f64);
+    let refined_peak_index = refine_fundamentals(&correlation, peak_index as f32 - 0.5, peak_index as f32 + 0.5);
 
     if is_noise(&correlation, refined_peak_index) {
         None
@@ -53,27 +47,28 @@ pub fn find_fundamental_frequency_correlation(input: &Vec<f64>, sample_rate: f64
     }
 }
 
-fn refine_fundamentals(correlation: &Vec<f64>, initial_guess: f64) -> f64 {
-    let mut low_bound = initial_guess - 0.5;
-    let mut high_bound = initial_guess + 0.5;
-
-    for _ in 0..5 {
-        let data_points = 2 * correlation.len() / high_bound.ceil() as usize;
+fn refine_fundamentals(correlation: &Vec<f32>, low_bound: f32, high_bound: f32) -> f32 {
+    let data_points = 2 * correlation.len() / high_bound.ceil() as usize;
+    let range = high_bound - low_bound;
+    let midpoint = (low_bound + high_bound) / 2.0;
+    
+    if (range * data_points as f32) < 1.0 {
+        midpoint
+    }
+    else {
         let low_guess = score_guess(&correlation, low_bound, data_points);
         let high_guess = score_guess(&correlation, high_bound, data_points);
-
-        let midpoint = (low_bound + high_bound) / 2.0;
+        
         if high_guess > low_guess {
-            low_bound = midpoint;
+            refine_fundamentals(&correlation, midpoint, high_bound)
         }
         else {
-            high_bound = midpoint;
+            refine_fundamentals(&correlation, low_bound, midpoint)
         }
     }
-    (low_bound + high_bound) / 2.0
 }
 
-fn is_noise(correlation: &Vec<f64>, fundamental: f64) -> bool {
+fn is_noise(correlation: &Vec<f32>, fundamental: f32) -> bool {
     let value_at_point = interpolate(&correlation, fundamental);
     let score_data_points = 2 * correlation.len() / fundamental.ceil() as usize;
     let score = score_guess(&correlation, fundamental, score_data_points);
@@ -81,22 +76,20 @@ fn is_noise(correlation: &Vec<f64>, fundamental: f64) -> bool {
     value_at_point > 2.0*score
 }
 
-fn score_guess(correlation: &Vec<f64>, period: f64, data_points: usize) -> f64 {
-    let mut score = 0.0;
-    for i in 1..data_points {
+fn score_guess(correlation: &Vec<f32>, period: f32, data_points: usize) -> f32 {
+    (1..data_points).map(|i| {
         let expected_sign = if i % 2 == 0 { 1.0 } else { -1.0 };
-        score += expected_sign * 0.5 * i as f64 * interpolate(&correlation, i as f64 * period / 2.0);
-    }
-    score
+        let x = i as f32 * period / 2.0;
+        let weight = 0.5 * i as f32;
+        expected_sign * weight * interpolate(&correlation, x)
+    }).sum()
 }
 
-fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
+fn interpolate(correlation: &Vec<f32>, x: f32) -> f32 {
     if x < 0.0 {
-        println!("<0");
         correlation[0]
     }
-    else if x >= correlation.len() as f64 {
-        println!(">len");
+    else if x >= correlation.len() as f32 {
         correlation[correlation.len()-1]
     }
     else {
@@ -117,30 +110,30 @@ fn interpolate(correlation: &Vec<f64>, x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f64::consts::PI;
+    use std::f32::consts::PI;
     
-    const SAMPLE_RATE: f64 = 44100.0;
+    const SAMPLE_RATE: f32 = 44100.0;
     const FRAMES: usize = 512;
 
-    fn frequency_resolution() -> f64 {
-        SAMPLE_RATE / 2.0 / FRAMES as f64
+    fn frequency_resolution() -> f32 {
+        SAMPLE_RATE / 2.0 / FRAMES as f32
     }
 
-    fn sin_arg(f: f64, t: f64, phase: f64) -> f64 {
-        2.0 as f64 * PI * f * t + phase
+    fn sin_arg(f: f32, t: f32, phase: f32) -> f32 {
+        2.0 as f32 * PI * f * t + phase
     }
 
-    fn sample_sinusoud(amplitude: f64, frequency: f64, phase: f64) -> Vec<f64> {
+    fn sample_sinusoud(amplitude: f32, frequency: f32, phase: f32) -> Vec<f32> {
         (0..FRAMES)
             .map(|x| {
-                let t = x as f64 / SAMPLE_RATE;
+                let t = x as f32 / SAMPLE_RATE;
                 sin_arg(frequency, t, phase).sin() * amplitude
             }).collect()
     }
     
     #[test]
     fn correlation_on_sine_wave() {
-        let frequency = 440.0 as f64; //concert A
+        let frequency = 440.0 as f32; //concert A
         
         let samples = sample_sinusoud(1.0, frequency, 0.0);
         let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
@@ -169,11 +162,11 @@ mod tests {
     }
 }
 
-pub fn hz_to_midi_number(hz: f64) -> f64 {
+pub fn hz_to_midi_number(hz: f32) -> f32 {
     69.0 + 12.0 * (hz / 440.0).log2()
 }
 
-pub fn hz_to_cents_error(hz: f64) -> f64 {
+pub fn hz_to_cents_error(hz: f32) -> f32 {
     let midi_number = hz_to_midi_number(hz);
     let cents = (midi_number * 100.0).round() % 100.0;
     if cents >= 50.0 {
@@ -184,7 +177,7 @@ pub fn hz_to_cents_error(hz: f64) -> f64 {
     }
 }
 
-pub fn hz_to_pitch(hz: f64) -> String {
+pub fn hz_to_pitch(hz: f32) -> String {
     let pitch_names = [
         "C ",
         "C#",
@@ -204,7 +197,7 @@ pub fn hz_to_pitch(hz: f64) -> String {
     //midi_number of 0 is C-1.
 
     let rounded_pitch = midi_number.round() as i32;
-    let name = pitch_names[rounded_pitch as usize % pitch_names.len()].to_string();
+    let name = pitch_names[rounded_pitch as usize % pitch_names.len()];
     let octave = rounded_pitch / pitch_names.len() as i32 - 1; //0 is C-1
     if octave < 0 {
         return "< C 1".to_string();
@@ -234,7 +227,7 @@ fn f5_is_correct() {
 }
 
 
-pub fn align_to_rising_edge(samples: &Vec<f64>) -> Vec<f64> {
+pub fn align_to_rising_edge(samples: &Vec<f32>) -> Vec<f32> {
     remove_mean_offset(&samples)
         .iter()
         .skip_while(|x| !x.is_sign_negative())
