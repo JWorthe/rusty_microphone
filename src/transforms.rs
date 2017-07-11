@@ -15,7 +15,7 @@ pub fn correlation(signal: &Vec<f32>) -> Vec<f32> {
 pub fn find_fundamental_frequency_correlation(signal: &Vec<f32>, sample_rate: f32) -> Option<f32> {
     let normalized_signal = remove_mean_offset(&signal);
     
-    if normalized_signal.iter().all(|&x| x.abs() < 0.1) {
+    if normalized_signal.iter().all(|&x| x.abs() < 0.05) {
         // silence
         return None;
     }

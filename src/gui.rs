@@ -225,23 +225,30 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
         let line_indicator_height = 20.0;
         let color_indicator_height = canvas.get_allocated_height() as f64 - line_indicator_height;
 
-        if let Ok(Some(error)) = cross_thread_state.read().map(|state| state.error) {
-            let error_line_x = midpoint + error as f64 * midpoint / 50.0;
-            context.new_path();
-            context.move_to(error_line_x, 0.0);
-            context.line_to(error_line_x, line_indicator_height);
-            context.stroke();
-            
-            
-            //flat on the left
-            context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error as f64/50.0} else {0.0});
-            context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
-            context.fill();
+        match cross_thread_state.read().map(|state| state.error) {
+            Ok(Some(error)) =>  {
+                let error_line_x = midpoint + error as f64 * midpoint / 50.0;
+                context.new_path();
+                context.move_to(error_line_x, 0.0);
+                context.line_to(error_line_x, line_indicator_height);
+                context.stroke();
+                
+                
+                //flat on the left
+                context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error as f64/50.0} else {0.0});
+                context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
+                context.fill();
 
-            //sharp on the right
-            context.set_source_rgb(if error > 0.0 {error as f64/50.0} else {0.0}, 0.0, 0.0);
-            context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
-            context.fill();
+                //sharp on the right
+                context.set_source_rgb(if error > 0.0 {error as f64/50.0} else {0.0}, 0.0, 0.0);
+                context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
+                context.fill();
+            },
+            _ => {
+                context.set_source_rgb(0.0, 0.0, 0.0);
+                context.rectangle(0.0, line_indicator_height, width, color_indicator_height+line_indicator_height);
+                context.fill();
+            }
         }
         
         gtk::Inhibit(false)
