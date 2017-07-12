@@ -7,3 +7,8 @@ authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 portaudio = "0.7.0"
 gtk = "0.1.1"
 cairo-rs = "0.1.1"
+bencher = "0.1.2"
+
+[[bench]]
+name = "transforms"
+harness = false

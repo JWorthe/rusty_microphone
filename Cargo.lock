@@ -2,6 +2,7 @@
 name = "rusty_microphone"
 version = "0.1.0"
 dependencies = [
+ "bencher 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "cairo-rs 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gtk 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "portaudio 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -18,6 +19,11 @@ dependencies = [
  "libc 0.2.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "pkg-config 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "bencher"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "bitflags"
@@ -288,6 +294,7 @@ dependencies = [
 
 [metadata]
 "checksum atk-sys 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9d3dd4937c8c40a0b5184d7810772d44cd3d4afdca711b8878c7f14b3f8ef80f"
+"checksum bencher 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1938914a389928f8c2cc0aec747380e0b2b854094710e7d03f8eb3762aa7f7a2"
 "checksum bitflags 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8dead7461c1127cf637931a1e50934eb6eee8bff2f74433ac7909e9afcee04a3"
 "checksum bitflags 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4f67931368edf3a9a51d29886d245f1c3db2f1ef0dcc9e35ff70341b78c10d23"
 "checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
