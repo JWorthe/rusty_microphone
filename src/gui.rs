@@ -163,18 +163,7 @@ fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_send
 
 fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
-        loop {
-            let mut samples = None;
-
-            // ignore all pending samples until we get to the most recent one
-            while let Ok(next_samples) = mic_receiver.try_recv() {
-                samples = Some(next_samples);
-            }
-            let samples = match samples {
-                Some(samples) => samples,
-                None => {continue;}
-            };
-
+        while let Ok(samples) = mic_receiver.recv() {
             let signal = ::transforms::align_to_rising_edge(&samples);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
