@@ -10,7 +10,7 @@ use std::io::Write;
 use std::thread;
 use std::sync::mpsc::*;
 
-const FPS: u32 = 30;
+const FPS: u32 = 60;
 
 struct RustyUi {
     dropdown: gtk::ComboBoxText,
@@ -251,7 +251,12 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
         if let Ok(cross_thread_state) = cross_thread_state.read() {
             let ref signal = cross_thread_state.signal;
             let width = canvas.get_allocated_width() as f64;
-            let len = 512.0; //Set as a constant so signal won't change size based on zero point.
+            
+            // Set as a constant so signal won't change size based on
+            // zero point, but don't take the window size exactly
+            // since some will be cropped off the beginning.
+            let len = ::audio::FRAMES as f64 * 0.8;
+            
             let height = canvas.get_allocated_height() as f64;
             let mid_height = height / 2.0;
             let max = 1.0;

@@ -4,7 +4,7 @@ use portaudio as pa;
 use std::sync::mpsc::*;
 
 pub const SAMPLE_RATE: f32 = 44100.0;
-pub const FRAMES: usize = 1024;
+pub const FRAMES: usize = 512;
 
 pub fn init() -> Result<pa::PortAudio, pa::Error> {
     pa::PortAudio::new()
