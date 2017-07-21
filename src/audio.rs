@@ -30,8 +30,8 @@ pub fn get_default_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
 }
 
 pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
-    let default = get_default_device(&pa)?;
-    start_listening(&pa, default, sender)
+    let default = get_default_device(pa)?;
+    start_listening(pa, default, sender)
 }
 
 pub fn start_listening(pa: &pa::PortAudio, device_index: u32,

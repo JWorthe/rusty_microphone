@@ -141,14 +141,13 @@ fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f32>>, state: Rc<Re
     let dropdown = state.borrow().ui.dropdown.clone();
     start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone());
     dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
-        start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone())
+        start_listening_current_dropdown_value(dropdown, mic_sender.clone(), state.clone())
     });
 }
 
 fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
-    match state.borrow_mut().pa_stream {
-        Some(ref mut stream) => {stream.stop().ok();},
-        _ => {}
+    if let Some(ref mut stream) = state.borrow_mut().pa_stream {
+        stream.stop().ok();
     }
     let selected_mic = match dropdown.get_active_id().and_then(|id| id.parse().ok()) {
         Some(mic) => mic,
@@ -191,9 +190,9 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: 
 
 fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     gtk::timeout_add(1000/FPS, move || {
-        let ref ui = state.borrow().ui;
+        let ui = &state.borrow().ui;
         if let Ok(cross_thread_state) = cross_thread_state.read() {
-            let ref pitch = cross_thread_state.pitch;
+            let pitch = &cross_thread_state.pitch;
             ui.pitch_label.set_label(pitch.as_ref());
             ui.pitch_error_indicator.queue_draw();
             ui.oscilloscope_chart.queue_draw();
@@ -206,8 +205,8 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
 
 fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
-    let ref canvas = outer_state.borrow().ui.pitch_error_indicator;
-    canvas.connect_draw(move |ref canvas, ref context| {
+    let canvas = &outer_state.borrow().ui.pitch_error_indicator;
+    canvas.connect_draw(move |canvas, context| {
         let width = canvas.get_allocated_width() as f64;
         let midpoint = width / 2.0;
 
@@ -246,10 +245,10 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
 
 fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
-    let ref canvas = outer_state.borrow().ui.oscilloscope_chart;
-    canvas.connect_draw(move |ref canvas, ref context| {
+    let canvas = &outer_state.borrow().ui.oscilloscope_chart;
+    canvas.connect_draw(move |canvas, context| {
         if let Ok(cross_thread_state) = cross_thread_state.read() {
-            let ref signal = cross_thread_state.signal;
+            let signal = &cross_thread_state.signal;
             let width = canvas.get_allocated_width() as f64;
             
             // Set as a constant so signal won't change size based on
@@ -279,8 +278,8 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
 
 fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     let outer_state = state.clone();
-    let ref canvas = outer_state.borrow().ui.correlation_chart;
-    canvas.connect_draw(move |ref canvas, ref context| {
+    let canvas = &outer_state.borrow().ui.correlation_chart;
+    canvas.connect_draw(move |canvas, context| {
         let width = canvas.get_allocated_width() as f64;
         let height = canvas.get_allocated_height() as f64;
         
@@ -291,7 +290,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
         context.stroke();
 
         if let Ok(cross_thread_state) = cross_thread_state.read() {
-            let ref correlation = cross_thread_state.correlation;
+            let correlation = &cross_thread_state.correlation;
             let len = correlation.len() as f64;
             let max = match correlation.first() {
                 Some(&c) => c as f64,
@@ -323,18 +322,18 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
 
 fn setup_chart_visibility_callbacks(state: Rc<RefCell<ApplicationState>>) {
     let outer_state = state.clone();
-    let ref oscilloscope_toggle_button = outer_state.borrow().ui.oscilloscope_toggle_button;
-    let ref correlation_toggle_button = outer_state.borrow().ui.correlation_toggle_button;
+    let oscilloscope_toggle_button = &outer_state.borrow().ui.oscilloscope_toggle_button;
+    let correlation_toggle_button = &outer_state.borrow().ui.correlation_toggle_button;
 
     let oscilloscope_state = state.clone();
     oscilloscope_toggle_button.connect_clicked(move |_| {
-        let ref chart = oscilloscope_state.borrow().ui.oscilloscope_chart;
+        let chart = &oscilloscope_state.borrow().ui.oscilloscope_chart;
         chart.set_visible(!chart.get_visible());
     });
 
     let correlation_state = state.clone();
     correlation_toggle_button.connect_clicked(move |_| {
-        let ref chart = correlation_state.borrow().ui.correlation_chart;
+        let chart = &correlation_state.borrow().ui.correlation_chart;
         chart.set_visible(!chart.get_visible());
     });
 }

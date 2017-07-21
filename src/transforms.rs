@@ -1,9 +1,9 @@
-pub fn remove_mean_offset(signal: &Vec<f32>) -> Vec<f32> {
+pub fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
     let mean = signal.iter().sum::<f32>()/signal.len() as f32;
     signal.iter().map(|x| x - mean).collect()
 }
 
-pub fn correlation(signal: &Vec<f32>) -> Vec<f32> {
+pub fn correlation(signal: &[f32]) -> Vec<f32> {
     (0..signal.len()).map(|offset| {
         signal.iter().take(signal.len() - offset)
             .zip(signal.iter().skip(offset))
@@ -12,8 +12,8 @@ pub fn correlation(signal: &Vec<f32>) -> Vec<f32> {
     }).collect()
 }
 
-pub fn find_fundamental_frequency_correlation(signal: &Vec<f32>, sample_rate: f32) -> Option<f32> {
-    let normalized_signal = remove_mean_offset(&signal);
+pub fn find_fundamental_frequency_correlation(signal: &[f32], sample_rate: f32) -> Option<f32> {
+    let normalized_signal = remove_mean_offset(signal);
     
     if normalized_signal.iter().all(|&x| x.abs() < 0.05) {
         // silence
@@ -47,7 +47,7 @@ pub fn find_fundamental_frequency_correlation(signal: &Vec<f32>, sample_rate: f3
     }
 }
 
-fn refine_fundamentals(correlation: &Vec<f32>, low_bound: f32, high_bound: f32) -> f32 {
+fn refine_fundamentals(correlation: &[f32], low_bound: f32, high_bound: f32) -> f32 {
     let data_points = 2 * correlation.len() / high_bound.ceil() as usize;
     let range = high_bound - low_bound;
     let midpoint = (low_bound + high_bound) / 2.0;
@@ -56,36 +56,37 @@ fn refine_fundamentals(correlation: &Vec<f32>, low_bound: f32, high_bound: f32) 
         midpoint
     }
     else {
-        let low_guess = score_guess(&correlation, low_bound, data_points);
-        let high_guess = score_guess(&correlation, high_bound, data_points);
+        let low_guess = score_guess(correlation, low_bound, data_points);
+        let high_guess = score_guess(correlation, high_bound, data_points);
         
         if high_guess > low_guess {
-            refine_fundamentals(&correlation, midpoint, high_bound)
+            refine_fundamentals(correlation, midpoint, high_bound)
         }
         else {
-            refine_fundamentals(&correlation, low_bound, midpoint)
+            refine_fundamentals(correlation, low_bound, midpoint)
         }
     }
 }
 
-fn is_noise(correlation: &Vec<f32>, fundamental: f32) -> bool {
-    let value_at_point = interpolate(&correlation, fundamental);
+
+fn is_noise(correlation: &[f32], fundamental: f32) -> bool {
+    let value_at_point = interpolate(correlation, fundamental);
     let score_data_points = 2 * correlation.len() / fundamental.ceil() as usize;
-    let score = score_guess(&correlation, fundamental, score_data_points);
+    let score = score_guess(correlation, fundamental, score_data_points);
 
     value_at_point > 2.0*score
 }
 
-fn score_guess(correlation: &Vec<f32>, period: f32, data_points: usize) -> f32 {
+fn score_guess(correlation: &[f32], period: f32, data_points: usize) -> f32 {
     (1..data_points).map(|i| {
         let expected_sign = if i % 2 == 0 { 1.0 } else { -1.0 };
         let x = i as f32 * period / 2.0;
         let weight = 0.5 * i as f32;
-        expected_sign * weight * interpolate(&correlation, x)
+        expected_sign * weight * interpolate(correlation, x)
     }).sum()
 }
 
-fn interpolate(correlation: &Vec<f32>, x: f32) -> f32 {
+fn interpolate(correlation: &[f32], x: f32) -> f32 {
     if x < 0.0 {
         correlation[0]
     }
@@ -227,8 +228,8 @@ fn f5_is_correct() {
 }
 
 
-pub fn align_to_rising_edge(samples: &Vec<f32>) -> Vec<f32> {
-    remove_mean_offset(&samples)
+pub fn align_to_rising_edge(samples: &[f32]) -> Vec<f32> {
+    remove_mean_offset(samples)
         .iter()
         .skip_while(|x| !x.is_sign_negative())
         .skip_while(|x| x.is_sign_negative())
