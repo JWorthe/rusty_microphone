@@ -148,7 +148,7 @@ mod tests {
         let samples2a = sample_sinusoud(1.0, 880.0, 0.0);
         let expected_fundamental = 440.0;
         
-        let samples = samples1a.iter().zip(samples2a.iter())
+        let samples: Vec<f32> = samples1a.iter().zip(samples2a.iter())
             .map(|(a, b)| a+b)
             .collect();
 
