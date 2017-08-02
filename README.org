@@ -15,9 +15,31 @@ day to day work.
 
 * Getting started
 
+** Environment Setup
+
 This is a Rust project. The latest version of the Rust compiler and
 Cargo are available from your system's package manager, or from
 https://www.rust-lang.org/.
+
+The project depends on two native libraries: GTK and
+Portaudio. These need to be preinstalled.
+
+On OSX, this can be done with Homebrew using
+
+#+BEGIN_SRC sh
+brew install gtk+3
+brew install portaudio
+#+END_SRC
+
+On Ubuntu, you can skip the portaudio install since it can be compiled
+as part of the build process. You still need to install GTK though,
+like so:
+
+#+BEGIN_SRC sh
+apt-get install libgtk-3-bin libgtk-3-dev libpango1.0-0
+#+END_SRC
+
+** Compiling and running
 
 To compile the project:
 
