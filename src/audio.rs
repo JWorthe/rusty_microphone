@@ -53,7 +53,7 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
         match sender.send(Vec::from(buffer)) {
             Ok(_) => pa::Continue,
-            Err(_) => pa::Complete //this happens when receiver is dropped
+            Err(_) => pa::Complete
         }
     };
 
