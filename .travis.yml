@@ -3,12 +3,22 @@ rust:
   - stable
   - beta
   - nightly
+  
 matrix:
   allow_failures:
     - rust: nightly
+    - os: osx
+    
 addons:
   apt:
     packages:
     - libgtk-3-bin
     - libgtk-3-dev
     - libpango1.0-0
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install gtk+3; fi
+  
+os:
+  - linux
+  - osx
