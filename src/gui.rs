@@ -163,6 +163,9 @@ fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_send
 fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
         while let Ok(samples) = mic_receiver.recv() {
+            //just in case we hit performance difficulties, clear out the channel
+            while mic_receiver.try_recv().ok() != None {}
+            
             let signal = ::transforms::align_to_rising_edge(&samples);
             let correlation = ::transforms::correlation(&samples);
             let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
