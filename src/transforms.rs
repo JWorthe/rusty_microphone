@@ -180,18 +180,18 @@ pub fn hz_to_cents_error(hz: f32) -> f32 {
 
 pub fn hz_to_pitch(hz: f32) -> String {
     let pitch_names = [
-        "C ",
-        "C#",
-        "D ",
-        "Eb",
-        "E ",
-        "F ",
-        "F#",
-        "G ",
-        "G#",
-        "A ",
-        "Bb",
-        "B "
+        "C",
+        "C♯",
+        "D",
+        "E♭",
+        "E",
+        "F",
+        "F♯",
+        "G",
+        "G♯",
+        "A",
+        "B♭",
+        "B"
     ];
 
     let midi_number = hz_to_midi_number(hz);
@@ -204,7 +204,7 @@ pub fn hz_to_pitch(hz: f32) -> String {
         return "< C 1".to_string();
     }
 
-    format!("{}{}", name, octave)
+    format!("{: <2}{}", name, octave)
 }
 
 #[test]
