@@ -39,6 +39,13 @@ like so:
 apt-get install libgtk-3-bin libgtk-3-dev libpango1.0-0
 #+END_SRC
 
+On Fedora
+
+#+BEGIN_SRC sh
+yum install gtk3-devel portaudio-devel
+#+END_SRC
+
+
 ** Compiling and running
 
 To compile the project:
