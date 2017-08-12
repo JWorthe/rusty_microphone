@@ -87,10 +87,10 @@ fn score_guess(correlation: &[f32], period: f32, data_points: usize) -> f32 {
 }
 
 fn interpolate(correlation: &[f32], x: f32) -> f32 {
-    if x < 0.0 {
+    if x.floor() < 0.0 {
         correlation[0]
     }
-    else if x >= correlation.len() as f32 {
+    else if x.ceil() >= correlation.len() as f32 {
         correlation[correlation.len()-1]
     }
     else {
