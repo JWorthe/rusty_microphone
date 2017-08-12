@@ -27,6 +27,7 @@ Portaudio. These need to be preinstalled.
 On OSX, this can be done with Homebrew using
 
 #+BEGIN_SRC sh
+brew install pkg-config
 brew install gtk+3
 brew install portaudio
 #+END_SRC
