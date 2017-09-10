@@ -1,3 +1,4 @@
+
 pub fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
     let mean = signal.iter().sum::<f32>()/signal.len() as f32;
     signal.iter().map(|x| x - mean).collect()
@@ -169,7 +170,7 @@ pub fn hz_to_midi_number(hz: f32) -> f32 {
 
 pub fn hz_to_cents_error(hz: f32) -> f32 {
     let midi_number = hz_to_midi_number(hz);
-    let cents = (midi_number * 100.0).round() % 100.0;
+    let cents = (midi_number % 1.0) * 100.0;
     if cents >= 50.0 {
         cents - 100.0
     }
