@@ -1,4 +1,3 @@
-extern crate portaudio;
 use portaudio as pa;
 
 use std::sync::mpsc::*;

@@ -4,10 +4,12 @@ version = "0.1.0"
 authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 
 [dependencies]
+bencher = "0.1.2"
+
+[target.'cfg(not(target_os = "emscripten"))'.dependencies]
 portaudio = "0.7.0"
 gtk = "0.1.1"
 cairo-rs = "0.1.1"
-bencher = "0.1.2"
 
 [[bench]]
 name = "transforms"
