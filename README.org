@@ -7,11 +7,9 @@
 The goal of this project is to create a dashboard for real-time
 feedback to musicians while they are practicing. This is a personal
 needs project, and so will at least initially focus only on the
-trumpet, and problems that I personally face.
+trumpet and working on my intonation.
 
-The other goal of this project is to give me a platform for learning
-Rust, and various other technologies that I do not get to touch in my
-day to day work.
+More information on how the project works can be read [[https://www.worthe-it.co.za/programming/2017/08/14/rusty-microphone.html][here]].
 
 * Getting started
 
@@ -99,3 +97,10 @@ Unfortunately, Windows is not currently supported. If you wish to
 contribute to adding Windows support, the most useful approach would
 be to take a look at the [[https://github.com/RustAudio/rust-portaudio/issues/71][open issue in rust-portaudio]] for supporting
 Windows in their build script.
+* Upcoming Features
+
+The main upcoming feature that I have planned is to create a
+WebAssembly build of the core logic of the application. With this,
+some HTML, and the Web Audio API, I will create an application that I
+can embed in my website to allow others to use without needing to
+compile or install it themselves.
