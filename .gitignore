@@ -1,1 +1,6 @@
 target
+/web/rusty_microphone.js
+/web/rusty_microphone-*.wasm
+/web/rusty_microphone-*.wast
+/web/rusty_microphone-*.js
+/web/rusty_microphone-*.map
