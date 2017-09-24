@@ -28,7 +28,7 @@ fn bench_correlation_on_sine_wave(b: &mut Bencher) {
     let samples = sample_sinusoud(1.0, frequency, 0.0);
     
     b.iter(|| {
-        rusty_microphone::transforms::find_fundamental_frequency_correlation(&samples, SAMPLE_RATE)
+        rusty_microphone::transforms::find_fundamental_frequency(&samples, SAMPLE_RATE)
     })
 }
 benchmark_group!(transforms, bench_correlation_on_sine_wave);

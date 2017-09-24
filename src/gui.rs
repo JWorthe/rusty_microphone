@@ -168,7 +168,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: 
             
             let signal = ::transforms::align_to_rising_edge(&samples);
             let correlation = ::transforms::correlation(&samples);
-            let fundamental = ::transforms::find_fundamental_frequency_correlation(&samples, ::audio::SAMPLE_RATE);
+            let fundamental = ::transforms::find_fundamental_frequency(&samples, ::audio::SAMPLE_RATE);
             let pitch = match fundamental {
                 Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
                 None => String::new()

@@ -1,5 +1,4 @@
-
-pub fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
+fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
     let mean = signal.iter().sum::<f32>()/signal.len() as f32;
     signal.iter().map(|x| x - mean).collect()
 }
@@ -13,7 +12,7 @@ pub fn correlation(signal: &[f32]) -> Vec<f32> {
     }).collect()
 }
 
-pub fn find_fundamental_frequency_correlation(signal: &[f32], sample_rate: f32) -> Option<f32> {
+pub fn find_fundamental_frequency(signal: &[f32], sample_rate: f32) -> Option<f32> {
     let normalized_signal = remove_mean_offset(signal);
     
     if normalized_signal.iter().all(|&x| x.abs() < 0.05) {
@@ -138,7 +137,7 @@ mod tests {
         let frequency = 440.0 as f32; //concert A
         
         let samples = sample_sinusoud(1.0, frequency, 0.0);
-        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
+        let fundamental = find_fundamental_frequency(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
         assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
     }
 
@@ -153,7 +152,7 @@ mod tests {
             .map(|(a, b)| a+b)
             .collect();
 
-        let fundamental = find_fundamental_frequency_correlation(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
+        let fundamental = find_fundamental_frequency(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
 
         assert!((fundamental-expected_fundamental).abs() < frequency_resolution(), "expected_fundamental={}, actual={}", expected_fundamental, fundamental);
     }
@@ -164,7 +163,7 @@ mod tests {
     }
 }
 
-pub fn hz_to_midi_number(hz: f32) -> f32 {
+fn hz_to_midi_number(hz: f32) -> f32 {
     69.0 + 12.0 * (hz / 440.0).log2()
 }
 
