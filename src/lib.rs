@@ -11,3 +11,6 @@ pub mod gui;
 extern crate portaudio;
 #[cfg(not(target_os = "emscripten"))]
 pub mod audio;
+
+#[cfg(target_os = "emscripten")]
+pub mod emscripten_api;

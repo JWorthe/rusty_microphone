@@ -236,19 +236,3 @@ pub fn align_to_rising_edge(samples: &[f32]) -> Vec<f32> {
         .cloned()
         .collect()
 }
-
-
-#[cfg(target_os = "emscripten")]
-pub mod emscripten_api {
-    #[no_mangle]
-    pub extern "C" fn find_fundamental_frequency(signal: *const f32, signal_length: isize, sample_rate: f32) -> f32 {
-        use std::slice;
-        let signal_slice = unsafe {
-            &slice::from_raw_parts(signal, signal_length as usize)
-        };
-        
-        println!("Signal is {:?}", signal_slice);
-        println!("Sample rate is {:?}Hz", sample_rate);
-        super::find_fundamental_frequency(&signal_slice, sample_rate).unwrap_or(0.0)
-    }
-}
