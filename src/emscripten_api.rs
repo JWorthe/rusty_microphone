@@ -1,5 +1,8 @@
 use transforms;
 
+use std::os::raw::c_char;
+use std::ffi::CString;
+
 #[no_mangle]
 pub extern "C" fn find_fundamental_frequency(signal: *const f32, signal_length: isize, sample_rate: f32) -> f32 {
     use std::slice;
@@ -11,29 +14,14 @@ pub extern "C" fn find_fundamental_frequency(signal: *const f32, signal_length: 
 }
 
 #[no_mangle]
-pub extern "C" fn correlation(signal: *const f32, signal_length: isize) {
-    //TODO correlate inline
-}
-
-#[no_mangle]
 pub extern "C" fn hz_to_cents_error(hz: f32) -> f32 {
-    //TODO implement
-    0.0
+    transforms::hz_to_cents_error(hz)
 }
-
-use std::os::raw::c_char;
-use std::ffi::CStr;
-use std::ffi::CString;
 
 #[no_mangle]
 pub extern "C" fn hz_to_pitch(hz: f32) -> *mut c_char {
-    //TODO implement
-    CString::new("C 4")
+    let pitch = transforms::hz_to_pitch(hz);
+    CString::new(pitch)
 		.unwrap()
         .into_raw()
-}
-
-#[no_mangle]
-pub extern "C" fn align_to_rising_edge(signal: *const f32, signal_length: isize) {
-    //TODO format signal nicely inline
 }

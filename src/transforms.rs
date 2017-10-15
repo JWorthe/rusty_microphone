@@ -169,7 +169,7 @@ fn hz_to_midi_number(hz: f32) -> f32 {
 
 pub fn hz_to_cents_error(hz: f32) -> f32 {
     let midi_number = hz_to_midi_number(hz);
-    let cents = (midi_number % 1.0) * 100.0;
+    let cents = (midi_number - midi_number.floor()) * 100.0;
     if cents >= 50.0 {
         cents - 100.0
     }
