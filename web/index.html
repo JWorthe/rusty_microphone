@@ -3,5 +3,10 @@
         <script src="main.js"></script>
         <script src="rusty_microphone.js"></script>
     </head>
-    <body></body>
+    <body>
+      <p>The current note being played is <span id="pitch-label"></span></p>
+      <p>It is <span id="pitch-error-direction"></span> by <span id="pitch-error"></span> cents</p>
+
+      <canvas id="oscilloscope" width="300" height="300" />
+    </body>
 </html>

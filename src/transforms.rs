@@ -179,6 +179,10 @@ pub fn hz_to_cents_error(hz: f32) -> f32 {
 }
 
 pub fn hz_to_pitch(hz: f32) -> String {
+    if hz <= 0.0 {
+        return "< C 1".to_string();
+    }
+    
     let pitch_names = [
         "C",
         "C♯",
