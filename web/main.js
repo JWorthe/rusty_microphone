@@ -44,17 +44,19 @@ function findFundamentalFrequency(data, samplingRate) {
     });
 }
 
+var nDataBytes = null;
 var dataPtr = null;
 var dataHeap = null;
 function findFundamentalFrequencyNoFree(data, samplingRate) {
+    var length = Math.min(data.length, 512);
     //assume data is already a Float32Array and its length won't change from call to call
     if (!dataPtr) {
-        var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
+        nDataBytes = length * data.BYTES_PER_ELEMENT;
         dataPtr = Module._malloc(nDataBytes);
         dataHeap = new Uint8Array(Module.HEAPU8.buffer, dataPtr, nDataBytes);
     }
-    dataHeap.set(new Uint8Array(data.buffer));
-    return Module._find_fundamental_frequency(dataPtr, data.length, samplingRate);    
+    dataHeap.set(new Uint8Array(data.buffer, data.buffer.byteLength - nDataBytes));
+    return Module._find_fundamental_frequency(dataPtr, length, samplingRate);    
 }
 
 
@@ -94,7 +96,7 @@ function draw(dataArray, canvas, canvasCtx) {
     // This draw example is currently heavily based on an example
     // from MDN:
     // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
-    var bufferLength = dataArray.length;
+    var bufferLength = Math.min(dataArray.length, 512);
 
     canvasCtx.fillStyle = 'rgb(200, 200, 200)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
@@ -108,9 +110,7 @@ function draw(dataArray, canvas, canvasCtx) {
     var x = 0;
 
     for (var i = 0; i < bufferLength; i++) {
-
-        var v = dataArray[i] / 128.0;
-        var y = v * canvas.height / 2;
+        var y = (dataArray[i] * canvas.height / 2) + canvas.height / 2;
 
         if (i === 0) {
             canvasCtx.moveTo(x, y);
@@ -121,7 +121,6 @@ function draw(dataArray, canvas, canvasCtx) {
         x += sliceWidth;
     }
 
-    canvasCtx.lineTo(canvas.width, canvas.height / 2);
     canvasCtx.stroke();
 };
 
@@ -146,7 +145,7 @@ function main() {
                     var dt = timestamp - lastTimestamp;
                     lastTimestamp = timestamp;
                     var framerate = 100000/dt;
-                    console.log("Framerate is", framerate);
+                    document.getElementById('frame-rate').innerHTML = framerate.toFixed(2) + 'Hz';
                 }
                 
                 var dataArray = new Float32Array(analyser.fftSize);
