@@ -1,3 +1,5 @@
+use std::f32;
+
 fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
     let mean = signal.iter().sum::<f32>()/signal.len() as f32;
     signal.iter().map(|x| x - mean).collect()
@@ -168,6 +170,10 @@ fn hz_to_midi_number(hz: f32) -> f32 {
 }
 
 pub fn hz_to_cents_error(hz: f32) -> f32 {
+    if !hz.is_finite() {
+        return f32::NAN;
+    }
+    
     let midi_number = hz_to_midi_number(hz);
     let cents = (midi_number - midi_number.floor()) * 100.0;
     if cents >= 50.0 {
@@ -179,8 +185,8 @@ pub fn hz_to_cents_error(hz: f32) -> f32 {
 }
 
 pub fn hz_to_pitch(hz: f32) -> String {
-    if hz <= 0.0 {
-        return "< C 1".to_string();
+    if hz <= 0.0 || !hz.is_finite() {
+        return "".to_string();
     }
     
     let pitch_names = [
@@ -199,14 +205,11 @@ pub fn hz_to_pitch(hz: f32) -> String {
     ];
 
     let midi_number = hz_to_midi_number(hz);
-    //midi_number of 0 is C-1.
+    //midi_number of 0 is C1.
 
     let rounded_pitch = midi_number.round() as i32;
     let name = pitch_names[rounded_pitch as usize % pitch_names.len()];
-    let octave = rounded_pitch / pitch_names.len() as i32 - 1; //0 is C-1
-    if octave < 0 {
-        return "< C 1".to_string();
-    }
+    let octave = rounded_pitch / pitch_names.len() as i32 - 1; //0 is C1
 
     format!("{: <2}{}", name, octave)
 }

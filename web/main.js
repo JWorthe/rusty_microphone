@@ -76,58 +76,110 @@ function correlation(data) {
     });
 }
 
-function update(signal, sampleRate) {
+function update(view, signal, sampleRate, timestamp) {
     var fundamental = findFundamentalFrequencyNoFree(signal, sampleRate);
 
     var pitch = hzToPitch(fundamental);
     var error = hzToCentsError(fundamental);
 
-    document.getElementById('pitch-label').innerHTML = pitch;
-    if (error > 0) {
-        document.getElementById('pitch-error-direction').innerHTML = 'sharp';
-        document.getElementById('pitch-error').innerHTML = error;
-    } else {
-        document.getElementById('pitch-error-direction').innerHTML = 'flat';
-        document.getElementById('pitch-error').innerHTML = -error;
-    }    
+    view.draw(signal, timestamp, pitch, error);
 }
 
-function draw(dataArray, canvas, canvasCtx) {
-    // This draw example is currently heavily based on an example
-    // from MDN:
-    // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
-    var bufferLength = Math.min(dataArray.length, 512);
-
-    canvasCtx.fillStyle = 'rgb(200, 200, 200)';
-    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-    canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
-
-    canvasCtx.beginPath();
-
-    var sliceWidth = canvas.width * 1.0 / bufferLength;
-    var x = 0;
-
-    for (var i = 0; i < bufferLength; i++) {
-        var y = (dataArray[i] * canvas.height / 2) + canvas.height / 2;
-
-        if (i === 0) {
-            canvasCtx.moveTo(x, y);
-        } else {
-            canvasCtx.lineTo(x, y);
-        }
-
-        x += sliceWidth;
-    }
-
-    canvasCtx.stroke();
-};
-
-function main() {
+function initView() {
     var canvas = document.getElementById("oscilloscope");
     var canvasCtx = canvas.getContext("2d");
+
+    var frameRateLabel = document.getElementById('frame-rate');
+
+    var pitchLabel = document.getElementById('pitch-label');
+
+    var pitchIndicatorBar = document.getElementById('pitch-indicator-bar');
+    var flatIndicator = document.getElementById('flat-indicator');
+    var sharpIndicator = document.getElementById('sharp-indicator');
     
+    var lastTimestamp = 0;
+    var timestampMod = 0;
+
+    function draw(signal, timestamp, pitch, error) {
+        updateFramerate(timestamp);
+        updatePitchIndicators(pitch, error);
+        drawDebugGraph(signal);
+    }
+
+    function updateFramerate(timestamp) {
+        timestampMod += 1;
+        if (timestampMod === 100) {
+            timestampMod = 0;
+            var dt = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+            var framerate = 100000/dt;
+            frameRateLabel.innerText = framerate.toFixed(2);
+        }
+    }
+
+    function updatePitchIndicators(pitch, error) {
+        pitchLabel.innerText = pitch;
+
+        if (isNaN(error)) {
+            pitchIndicatorBar.setAttribute('style', 'visibility: hidden');
+        } else {
+            var sharpColour;
+            var flatColour;
+
+            if (error > 0) {
+                sharpColour = Math.floor(256*error/50);
+                flatColour = 0;
+            } else {
+                sharpColour = 0;
+                flatColour = Math.floor(-256*error/50);
+            }
+            flatIndicator.setAttribute('style', 'background: rgb(0,0,'+flatColour+')');
+            sharpIndicator.setAttribute('style', 'background: rgb('+sharpColour+',0,0)');
+
+            var errorIndicatorPercentage = error+50;
+            pitchIndicatorBar.setAttribute('style', 'left: ' + errorIndicatorPercentage.toFixed(2) + '%');
+        }
+    }
+    
+    function drawDebugGraph(signal) {
+        // This draw example is currently heavily based on an example
+        // from MDN:
+        // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
+        var bufferLength = Math.min(signal.length, 512);
+
+        canvasCtx.fillStyle = 'rgb(200, 200, 200)';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
+
+        canvasCtx.beginPath();
+
+        var sliceWidth = canvas.width * 1.0 / bufferLength;
+        var x = 0;
+
+        for (var i = 0; i < bufferLength; i++) {
+            var y = (signal[i] * canvas.height / 2) + canvas.height / 2;
+
+            if (i === 0) {
+                canvasCtx.moveTo(x, y);
+            } else {
+                canvasCtx.lineTo(x, y);
+            }
+
+            x += sliceWidth;
+        }
+
+        canvasCtx.stroke();
+    };
+
+    return {
+        draw: draw
+    };
+}
+
+
+function main() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(function(stream) {
             var context = new window.AudioContext();
@@ -135,23 +187,12 @@ function main() {
             var analyser = context.createAnalyser();
             input.connect(analyser);
 
-            var lastTimestamp = 0;
-            var timestampMod = 0;
+            var view = initView();
 
             function analyserNodeCallback(timestamp) {
-                timestampMod += 1;
-                if (timestampMod === 100) {
-                    timestampMod = 0;
-                    var dt = timestamp - lastTimestamp;
-                    lastTimestamp = timestamp;
-                    var framerate = 100000/dt;
-                    document.getElementById('frame-rate').innerHTML = framerate.toFixed(2) + 'Hz';
-                }
-                
                 var dataArray = new Float32Array(analyser.fftSize);
                 analyser.getFloatTimeDomainData(dataArray);
-                update(dataArray, context.sampleRate);
-                draw(dataArray, canvas, canvasCtx);
+                update(view, dataArray, context.sampleRate, timestamp);
                 window.requestAnimationFrame(analyserNodeCallback);
             }
 

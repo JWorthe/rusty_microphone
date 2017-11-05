@@ -3,6 +3,7 @@ use transforms;
 use std::os::raw::c_char;
 use std::ffi::CString;
 use std::slice;
+use std::f32;
 
 #[no_mangle]
 pub extern "C" fn find_fundamental_frequency(signal: *const f32, signal_length: isize, sample_rate: f32) -> f32 {
@@ -10,7 +11,7 @@ pub extern "C" fn find_fundamental_frequency(signal: *const f32, signal_length: 
         &slice::from_raw_parts(signal, signal_length as usize)
     };
     
-    transforms::find_fundamental_frequency(&signal_slice, sample_rate).unwrap_or(0.0)
+    transforms::find_fundamental_frequency(&signal_slice, sample_rate).unwrap_or(f32::NAN)
 }
 
 #[no_mangle]

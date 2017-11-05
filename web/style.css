@@ -1,0 +1,38 @@
+* {
+    box-sizing: border-box;
+}
+
+#rusty-microphone {
+    max-width: 320px;
+}
+#pitch-indicator-bar-container {
+    width: calc(100% - 2px);
+    height: 30px;
+    position: relative;
+}
+#pitch-indicator-bar {
+    height: 100%;
+    border: 1px solid black;
+    width: 0;
+    position: absolute;
+    left: 50%;
+}
+
+#pitch-indicator-colours {
+    width: 100%;
+    height: 50px;
+}
+
+#flat-indicator {
+    width: 50%;
+    height: 100%;
+    background: blue;
+    float: left;
+}
+
+#sharp-indicator {
+    width: 50%;
+    height: 100%;
+    background: red;
+    float: left;
+}

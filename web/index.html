@@ -2,12 +2,22 @@
     <head>
         <script src="main.js"></script>
         <script src="rusty_microphone.js"></script>
+        <link rel="stylesheet" href="style.css">
     </head>
     <body>
-      <p>The current note being played is <span id="pitch-label"></span></p>
-      <p>It is <span id="pitch-error-direction"></span> by <span id="pitch-error"></span> cents</p>
-      <p>The current framerate is <span id="frame-rate"></span></p>
+      <div id="rusty-microphone">
+        <p>The current note being played is <span id="pitch-label"></span></p>
+        <div id="pitch-indicator-bar-container">
+          <div id="pitch-indicator-bar"></div>
+        </div>
+        <div id="pitch-indicator-colours">
+          <div id="flat-indicator"></div>
+          <div id="sharp-indicator"></div>
+        </div>
 
-      <canvas id="oscilloscope" width="300" height="300" />
+        <canvas id="oscilloscope" width="320" height="300" />
+
+        <p>The current framerate is <span id="frame-rate"></span>Hz</p>
+      </div>
     </body>
 </html>
