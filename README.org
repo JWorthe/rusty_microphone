@@ -105,7 +105,5 @@ some HTML, and the Web Audio API, I will create an application that I
 can embed in my website to allow others to use without needing to
 compile or install it themselves.
 
-Progress can be seen by running ~make-web.sh~ and opening
-~web/index.html~. At first, this will just log to the console (open
-your browser's dev tools to see it). Eventually, there will be a
-graphical UI component here.
+Progress can be seen by running ~make build-web~ and opening
+~target/site/index.html~. This requires Make to be installed.
