@@ -5,6 +5,19 @@ var Module = {
     onRuntimeInitialized: main
 };
 
+/**
+ * Puts at javascript float array onto the heap and provides a pointer
+ *
+ * Webassembly's input types are limited to integers and floating
+ * point numbers. You can get around this limitation by putting the
+ * data you want (a f32 array in this case) onto the heap, and passing
+ * Webassembly a pointer and length. A callback is used for the actual
+ * Webassembly call so that the heap memory can be automatically freed
+ * afterwards.
+ *
+ * @param {array} jsArray - A javascript array, or Float32Array, of numbers
+ * @param {function} callback - The function to call with a pointer and length of the array
+ */
 function jsArrayToF32ArrayPtr(jsArray, callback) {
     var data = (jsArray instanceof Float32Array) ? jsArray : new Float32Array(jsArray);
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
@@ -20,6 +33,21 @@ function jsArrayToF32ArrayPtr(jsArray, callback) {
     return result;
 }
 
+/**
+ * Puts at javascript float array onto the heap and provides a pointer, for functions that mutate the array in place
+ *
+ * Webassembly's input types are limited to integers and floating
+ * point numbers. You can get around this limitation by putting the
+ * data you want (a f32 array in this case) onto the heap, and passing
+ * Webassembly a pointer and length. In this case, we also want to
+ * return an array of the same lenght, so our Webassembly function
+ * mutates the input array in place. A callback is used for the actual
+ * Webassembly call so that the heap memory can be automatically freed
+ * afterwards.
+ *
+ * @param {array} jsArray - A javascript array, or Float32Array, of numbers
+ * @param {function} callback - The function to call with a pointer and length of the array
+ */
 function jsArrayToF32ArrayPtrMutateInPlace(jsArray, mutate) {
     var data = new Float32Array(jsArray);
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
@@ -47,16 +75,21 @@ function findFundamentalFrequency(data, samplingRate) {
 var nDataBytes = null;
 var dataPtr = null;
 var dataHeap = null;
+/**
+ * Does the same thing as findFundamentalFrequency, except
+ * 1. assumes the array is already a Float32Array
+ * 2. assumes that the array will always be the same length of subsequent calls
+ * 3. does not free the allocated memory on the heap
+ * 4. reuses the allocated heap memory on subsequent calls
+ */
 function findFundamentalFrequencyNoFree(data, samplingRate) {
-    var length = Math.min(data.length, 512);
-    //assume data is already a Float32Array and its length won't change from call to call
     if (!dataPtr) {
-        nDataBytes = length * data.BYTES_PER_ELEMENT;
+        nDataBytes = data.length * data.BYTES_PER_ELEMENT;
         dataPtr = Module._malloc(nDataBytes);
         dataHeap = new Uint8Array(Module.HEAPU8.buffer, dataPtr, nDataBytes);
     }
     dataHeap.set(new Uint8Array(data.buffer, data.buffer.byteLength - nDataBytes));
-    return Module._find_fundamental_frequency(dataPtr, length, samplingRate);    
+    return Module._find_fundamental_frequency(dataPtr, data.length, samplingRate);    
 }
 
 
@@ -142,10 +175,8 @@ function initView() {
     }
     
     function drawDebugGraph(signal) {
-        // This draw example is currently heavily based on an example
-        // from MDN:
+        // This draw function is heavily based on an example from MDN:
         // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
-        var bufferLength = Math.min(signal.length, 512);
 
         canvasCtx.fillStyle = 'rgb(200, 200, 200)';
         canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
@@ -155,19 +186,15 @@ function initView() {
 
         canvasCtx.beginPath();
 
-        var sliceWidth = canvas.width * 1.0 / bufferLength;
-        var x = 0;
-
-        for (var i = 0; i < bufferLength; i++) {
+        for (var i = 0; i < signal.length; i++) {
             var y = (signal[i] * canvas.height / 2) + canvas.height / 2;
+            var x = i * canvas.width / signal.length;
 
             if (i === 0) {
                 canvasCtx.moveTo(x, y);
             } else {
                 canvasCtx.lineTo(x, y);
             }
-
-            x += sliceWidth;
         }
 
         canvasCtx.stroke();
@@ -185,6 +212,7 @@ function main() {
             var context = new window.AudioContext();
             var input = context.createMediaStreamSource(stream);
             var analyser = context.createAnalyser();
+            analyser.fftSize = 512;
             input.connect(analyser);
 
             var view = initView();

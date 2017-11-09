@@ -5,8 +5,20 @@
         <link rel="stylesheet" href="style.css">
     </head>
     <body>
+      <p>
+        This is a demo for the web build of Rusty Microphone using
+        Emscripten. It requires a browser that supports WebAssembly
+        and the Web Audio API. There may still be some rough edges
+        that need to be refined. If it does not appear to be working,
+        please make sure that you are using the latest version of your
+        web browser, since these technologies are still relatively
+        new.
+      </p>
+
+      <h1>Rusty Microphone</h1>
       <div id="rusty-microphone">
-        <p>The current note being played is <span id="pitch-label"></span></p>
+        
+        <p>The current note being played is <span id="pitch-label">unknown</span></p>
         <div id="pitch-indicator-bar-container">
           <div id="pitch-indicator-bar"></div>
         </div>
@@ -17,7 +29,7 @@
 
         <canvas id="oscilloscope" width="320" height="300"></canvas>
 
-        <p>The current framerate is <span id="frame-rate"></span>FPS</p>
+        <p>The current framerate is <span id="frame-rate">_</span>FPS</p>
       </div>
     </body>
 </html>
