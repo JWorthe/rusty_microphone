@@ -227,7 +227,7 @@ function main() {
             window.requestAnimationFrame(analyserNodeCallback);
         })
         .catch(function(err) {
-            console.err('Could not get the microphone');
-            console.err(err);
+            console.error('Could not open the microphone stream');
+            console.error(err);
         });
 }

@@ -9,6 +9,7 @@
     width: calc(100% - 2px);
     height: 30px;
     position: relative;
+    background: rgb(200, 200, 200);
 }
 #pitch-indicator-bar {
     height: 100%;
