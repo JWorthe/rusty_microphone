@@ -1,9 +1,35 @@
-// This is read and used by `site.js`
+// This is read and used by `rusty_microphone.js`
 var Module = {
     noInitialRun: true,
     noExitRuntime: true,
-    onRuntimeInitialized: main
+    onRuntimeInitialized: main,
+    onAbort: onAbort
 };
+checkBrowserSupport();
+
+function onAbort(reason) {
+    document.getElementById('loading').setAttribute('style', 'display:none');
+    document.getElementById('rusty-microphone').setAttribute('style', 'display:none');
+    document.getElementById('unexpected-error').removeAttribute('style');
+}
+
+function supportsWasm() {
+    return typeof WebAssembly === 'object';
+}
+
+function supportsUserMedia() {
+    return typeof navigator === 'object' &&
+        typeof navigator.mediaDevices === 'object' &&
+        typeof navigator.mediaDevices.getUserMedia === 'function' &&
+        typeof AudioContext === "function";
+}
+
+function checkBrowserSupport() {    
+    if (!supportsWasm() || !supportsUserMedia()) {
+        document.getElementById('loading').setAttribute('style', 'display:none');
+        document.getElementById('browser-support-error').removeAttribute('style');
+    }    
+}
 
 /**
  * Puts at javascript float array onto the heap and provides a pointer
@@ -133,6 +159,11 @@ function initView() {
     var lastTimestamp = 0;
     var timestampMod = 0;
 
+    document.getElementById('loading').setAttribute('style', 'display: none');
+    document.getElementById('browser-support-error').setAttribute('style', 'display: none');
+    document.getElementById('unexpected-error').setAttribute('style', 'display: none');
+    document.getElementById('rusty-microphone').removeAttribute('style');
+
     function draw(signal, timestamp, pitch, error) {
         updateFramerate(timestamp);
         updatePitchIndicators(pitch, error);
@@ -207,9 +238,13 @@ function initView() {
 
 
 function main() {
+    if (!supportsUserMedia()) {
+        return;
+    }
+    
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(function(stream) {
-            var context = new window.AudioContext();
+            var context = new AudioContext();
             var input = context.createMediaStreamSource(stream);
             var analyser = context.createAnalyser();
             analyser.fftSize = 512;
@@ -227,7 +262,7 @@ function main() {
             window.requestAnimationFrame(analyserNodeCallback);
         })
         .catch(function(err) {
-            console.error('Could not open the microphone stream');
-            console.error(err);
+            document.getElementById('loading').setAttribute('style', 'display:none');
+            document.getElementById('unexpected-error').removeAttribute('style');
         });
 }

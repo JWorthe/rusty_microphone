@@ -9,7 +9,9 @@
     width: calc(100% - 2px);
     height: 30px;
     position: relative;
-    background: rgb(200, 200, 200);
+    background: #C8C8C8;
+    border-right: 2px solid #C8C8C8;
+    box-sizing: content-box;
 }
 #pitch-indicator-bar {
     height: 100%;
@@ -36,4 +38,9 @@
     height: 100%;
     background: red;
     float: left;
+}
+
+.error {
+    border: 1px solid red;
+    padding: 10px;
 }
