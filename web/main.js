@@ -165,9 +165,9 @@ function initView() {
     document.getElementById('rusty-microphone').removeAttribute('style');
 
     function draw(signal, timestamp, pitch, error) {
-        updateFramerate(timestamp);
-        updatePitchIndicators(pitch, error);
         drawDebugGraph(signal);
+        updatePitchIndicators(pitch, error);
+        updateFramerate(timestamp);
     }
 
     function updateFramerate(timestamp) {
@@ -248,12 +248,13 @@ function main() {
             var input = context.createMediaStreamSource(stream);
             var analyser = context.createAnalyser();
             analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0;
             input.connect(analyser);
 
             var view = initView();
+            var dataArray = new Float32Array(analyser.fftSize);
 
             function analyserNodeCallback(timestamp) {
-                var dataArray = new Float32Array(analyser.fftSize);
                 analyser.getFloatTimeDomainData(dataArray);
                 update(view, dataArray, context.sampleRate, timestamp);
                 window.requestAnimationFrame(analyserNodeCallback);
