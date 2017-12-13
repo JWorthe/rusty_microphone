@@ -248,10 +248,13 @@ pub fn align_to_rising_edge(samples: &[f32]) -> Vec<f32> {
         .collect()
 }
 
-pub fn corrected_sine_wave(current_hz: f32, sample_rate: f32, frames: usize) -> Vec<f32> {
+pub fn corrected_sine_wave(current_hz: f32, phase_offset: f32, sample_rate: f32, frames: usize) -> (Vec<f32>, f32) {
     let rounded_midi = hz_to_midi_number(current_hz).round();
     let rounded_hz = midi_number_to_hz(rounded_midi);
-    sample_sinusoid(0.8, rounded_hz, 0.0, sample_rate, frames)
+
+    let samples_time = frames as f32 / sample_rate;
+    let new_phase_offset = (phase_offset + samples_time * rounded_hz * 2.0 * PI) % (2.0 * PI);
+    (sample_sinusoid(0.8, rounded_hz, phase_offset, sample_rate, frames), new_phase_offset)
 }
 
 #[test]

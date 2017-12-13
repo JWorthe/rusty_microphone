@@ -178,9 +178,10 @@ fn start_playing_default(play_receiver: Receiver<Vec<f32>>, state: Rc<RefCell<Ap
 
 fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, play_sender: Sender<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
+        let mut next_phase_offset = 0.0;
         while let Ok(samples) = mic_receiver.recv() {
             //just in case we hit performance difficulties, clear out the channel
-            while mic_receiver.try_recv().ok() != None {}
+            //while mic_receiver.try_recv().ok() != None {}
             
             let signal = ::transforms::align_to_rising_edge(&samples);
             let correlation = ::transforms::correlation(&samples);
@@ -192,7 +193,8 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, play_sender: Sender<
             let error = fundamental.map(::transforms::hz_to_cents_error);
 
             if let Some(fundamental) = fundamental {
-                let correct_pitch_signal = ::transforms::corrected_sine_wave(fundamental, ::audio::SAMPLE_RATE, ::audio::FRAMES);
+                let (correct_pitch_signal, new_phase_offset) = ::transforms::corrected_sine_wave(fundamental, next_phase_offset, ::audio::SAMPLE_RATE, ::audio::FRAMES);
+                next_phase_offset = new_phase_offset;
                 play_sender.send(correct_pitch_signal).ok();
             }
 
