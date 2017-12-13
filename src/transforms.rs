@@ -1,4 +1,5 @@
 use std::f32;
+use std::f32::consts::PI;
 
 fn remove_mean_offset(signal: &[f32]) -> Vec<f32> {
     let mean = signal.iter().sum::<f32>()/signal.len() as f32;
@@ -110,10 +111,17 @@ fn interpolate(correlation: &[f32], x: f32) -> f32 {
     }
 }
 
+fn sample_sinusoid(amplitude: f32, frequency: f32, phase: f32, sample_rate: f32, frames: usize) -> Vec<f32> {
+    (0..frames)
+        .map(|x| {
+            let t = x as f32 / sample_rate;
+            (2.0 as f32 * PI * frequency * t + phase).sin() * amplitude
+        }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f32::consts::PI;
     
     const SAMPLE_RATE: f32 = 44100.0;
     const FRAMES: usize = 512;
@@ -122,23 +130,15 @@ mod tests {
         SAMPLE_RATE / 2.0 / FRAMES as f32
     }
 
-    fn sin_arg(f: f32, t: f32, phase: f32) -> f32 {
-        2.0 as f32 * PI * f * t + phase
-    }
-
-    fn sample_sinusoud(amplitude: f32, frequency: f32, phase: f32) -> Vec<f32> {
-        (0..FRAMES)
-            .map(|x| {
-                let t = x as f32 / SAMPLE_RATE;
-                sin_arg(frequency, t, phase).sin() * amplitude
-            }).collect()
+    fn sample_sinusoid(amplitude: f32, frequency: f32, phase: f32) -> Vec<f32> {
+        super::sample_sinusoid(amplitude, frequency, phase, SAMPLE_RATE, FRAMES)
     }
     
     #[test]
     fn correlation_on_sine_wave() {
         let frequency = 440.0 as f32; //concert A
         
-        let samples = sample_sinusoud(1.0, frequency, 0.0);
+        let samples = sample_sinusoid(1.0, frequency, 0.0);
         let fundamental = find_fundamental_frequency(&samples, SAMPLE_RATE).expect("Find fundamental returned None");
         assert!((fundamental-frequency).abs() < frequency_resolution(), "expected={}, actual={}", frequency, fundamental);
     }
@@ -146,8 +146,8 @@ mod tests {
     #[test]
     fn correlation_on_two_sine_waves() {
         //Unfortunately, real signals won't be this neat
-        let samples1a = sample_sinusoud(2.0, 440.0, 0.0);
-        let samples2a = sample_sinusoud(1.0, 880.0, 0.0);
+        let samples1a = sample_sinusoid(2.0, 440.0, 0.0);
+        let samples2a = sample_sinusoid(1.0, 880.0, 0.0);
         let expected_fundamental = 440.0;
         
         let samples: Vec<f32> = samples1a.iter().zip(samples2a.iter())
@@ -167,6 +167,10 @@ mod tests {
 
 fn hz_to_midi_number(hz: f32) -> f32 {
     69.0 + 12.0 * (hz / 440.0).log2()
+}
+
+fn midi_number_to_hz(midi: f32) -> f32 {
+    (2.0 as f32).powf((midi - 69.0) / 12.0) * 440.0
 }
 
 pub fn hz_to_cents_error(hz: f32) -> f32 {
@@ -242,4 +246,18 @@ pub fn align_to_rising_edge(samples: &[f32]) -> Vec<f32> {
         .skip_while(|x| x.is_sign_negative())
         .cloned()
         .collect()
+}
+
+pub fn corrected_sine_wave(current_hz: f32, sample_rate: f32, frames: usize) -> Vec<f32> {
+    let rounded_midi = hz_to_midi_number(current_hz).round();
+    let rounded_hz = midi_number_to_hz(rounded_midi);
+    sample_sinusoid(0.8, rounded_hz, 0.0, sample_rate, frames)
+}
+
+#[test]
+fn corrected_near_a4_is_correct() {
+    assert_eq!(
+        corrected_sine_wave(436.0, 44100.0, 512),
+        sample_sinusoid(0.8, 440.0, 0.0, 44100.0, 512)
+    );
 }

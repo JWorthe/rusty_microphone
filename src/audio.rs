@@ -9,7 +9,7 @@ pub fn init() -> Result<pa::PortAudio, pa::Error> {
     pa::PortAudio::new()
 }
 
-pub fn get_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Error> {
+pub fn get_input_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Error> {
     // This pa.devices gives a Result of devices, each of which is
     // also a Result. So a Result<Collection<Result<Device>>>. We
     // mould it into devices: a Vec<(index, DeviceInfo)>.
@@ -23,13 +23,13 @@ pub fn get_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Err
     Ok(list)
 }
 
-pub fn get_default_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
+pub fn get_default_input_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
     let pa::DeviceIndex(default_input_index) = pa.default_input_device()?;
     Ok(default_input_index)
 }
 
 pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
-    let default = get_default_device(pa)?;
+    let default = get_default_input_device(pa)?;
     start_listening(pa, default, sender)
 }
 
@@ -70,9 +70,78 @@ fn start_listening_returns_successfully() {
     // throwing errors.
     let pa = init().expect("Could not init portaudio");
 
-    let devices = get_device_list(&pa).expect("Getting devices had an error");
+    let devices = get_input_device_list(&pa).expect("Getting devices had an error");
     assert!(devices.len() > 0);
     
     let (sender, _) = channel();
     start_listening_default(&pa, sender).expect("Error starting listening to first channel");
+}
+
+pub fn get_output_device_list(pa: &pa::PortAudio) -> Result<Vec<(u32, String)>, pa::Error> {
+    let devices = try!(try!(pa.devices()).map(|device| {
+        device.map(|(pa::DeviceIndex(idx), info)| (idx, info))
+    }).collect::<Result<Vec<_>, _>>());
+    
+    let list = devices.iter().filter(|&&(_, ref info)| info.max_output_channels > 0)
+        .map(|&(idx, ref info)| (idx, info.name.to_string()))
+        .collect();
+    Ok(list)
+}
+
+
+pub fn get_default_output_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
+    let pa::DeviceIndex(default_output_index) = pa.default_output_device()?;
+    Ok(default_output_index)
+}
+
+pub fn start_playing_default(pa: &pa::PortAudio,
+                             receiver: Receiver<Vec<f32>>)  -> Result<pa::Stream<pa::NonBlocking, pa::Output<f32>>, pa::Error> {
+    let default = get_default_output_device(pa)?;
+    start_playing(pa, default, receiver)
+}
+
+pub fn start_playing(pa: &pa::PortAudio, device_index: u32,
+                     receiver: Receiver<Vec<f32>>)  -> Result<pa::Stream<pa::NonBlocking, pa::Output<f32>>, pa::Error> {
+    let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
+    let latency = device_info.default_low_input_latency;
+
+    let output_params = pa::StreamParameters::<f32>::new(pa::DeviceIndex(device_index), 1, true, latency);
+    try!(pa.is_output_format_supported(output_params, SAMPLE_RATE as f64));
+    let stream_settings = pa::OutputStreamSettings::new(output_params, SAMPLE_RATE as f64, FRAMES as u32);
+
+    let callback = move |pa::OutputStreamCallbackArgs { buffer, .. }| {
+        match receiver.try_recv() {
+            Ok(samples) => {               
+                for (output_sample, input_sample) in buffer.iter_mut().zip(samples.iter()) {
+                    *output_sample = *input_sample;
+                }
+            },
+            Err(_) => {
+                for output_sample in buffer.iter_mut() {
+                    *output_sample = 0.0;
+                }
+            }
+        };
+        pa::Continue
+    };
+
+    let mut stream = try!(pa.open_non_blocking_stream(stream_settings, callback));
+    try!(stream.start());
+    
+    Ok(stream)
+}
+
+#[test]
+#[ignore] //ignored because TravisCI doesn't have any audio devices to test with
+fn start_playing_returns_successfully() {
+    // Just a note on unit tests here, portaudio doesn't seem to
+    // respond well to being initialized many times, and starts
+    // throwing errors.
+    let pa = init().expect("Could not init portaudio");
+
+    let devices = get_output_device_list(&pa).expect("Getting devices had an error");
+    assert!(devices.len() > 0);
+    
+    let (_, receiver) = channel();
+    start_playing_default(&pa, receiver).expect("Error starting playing to first channel");
 }

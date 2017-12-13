@@ -6,7 +6,7 @@ authors = ["Justin Worthe <justin.worthe@gmail.com>"]
 [dependencies]
 bencher = "0.1.2"
 
-[target.'cfg(not(target_os = "emscripten"))'.dependencies]
+[target.'cfg(not(any(target_arch="wasm32",target_os="emscripten")))'.dependencies]
 portaudio = "0.7.0"
 gtk = "0.1.1"
 cairo-rs = "0.1.1"
@@ -14,3 +14,8 @@ cairo-rs = "0.1.1"
 [[bench]]
 name = "transforms"
 harness = false
+
+[[bin]]
+name = "rusty_microphone"
+path = "src/main.rs"
+doc = false

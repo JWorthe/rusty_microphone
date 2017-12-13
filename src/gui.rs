@@ -24,7 +24,8 @@ struct RustyUi {
 
 struct ApplicationState {
     pa: pa::PortAudio,
-    pa_stream: Option<pa::Stream<pa::NonBlocking, pa::Input<f32>>>,
+    pa_input_stream: Option<pa::Stream<pa::NonBlocking, pa::Input<f32>>>,
+    pa_output_stream: Option<pa::Stream<pa::NonBlocking, pa::Output<f32>>>,
     ui: RustyUi
 }
 
@@ -38,14 +39,15 @@ struct CrossThreadState {
 
 pub fn start_gui() -> Result<(), String> {
     let pa = try!(::audio::init().map_err(|e| e.to_string()));
-    let microphones = try!(::audio::get_device_list(&pa).map_err(|e| e.to_string()));
-    let default_microphone = try!(::audio::get_default_device(&pa).map_err(|e| e.to_string()));
+    let microphones = try!(::audio::get_input_device_list(&pa).map_err(|e| e.to_string()));
+    let default_microphone = try!(::audio::get_default_input_device(&pa).map_err(|e| e.to_string()));
     
     try!(gtk::init().map_err(|_| "Failed to initialize GTK."));
 
     let state = Rc::new(RefCell::new(ApplicationState {
         pa: pa,
-        pa_stream: None,
+        pa_input_stream: None,
+        pa_output_stream: None,
         ui: create_window(microphones, default_microphone)
     }));
 
@@ -58,10 +60,12 @@ pub fn start_gui() -> Result<(), String> {
     }));
     
     let (mic_sender, mic_receiver) = channel();
+    let (play_sender, play_receiver) = channel();
 
     connect_dropdown_choose_microphone(mic_sender, state.clone());
+    start_playing_default(play_receiver, state.clone());
     
-    start_processing_audio(mic_receiver, cross_thread_state.clone());
+    start_processing_audio(mic_receiver, play_sender, cross_thread_state.clone());
     setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
     setup_pitch_error_indicator_callbacks(state.clone(), cross_thread_state.clone());
     setup_oscilloscope_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
@@ -146,7 +150,7 @@ fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f32>>, state: Rc<Re
 }
 
 fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
-    if let Some(ref mut stream) = state.borrow_mut().pa_stream {
+    if let Some(ref mut stream) = state.borrow_mut().pa_input_stream {
         stream.stop().ok();
     }
     let selected_mic = match dropdown.get_active_id().and_then(|id| id.parse().ok()) {
@@ -155,12 +159,24 @@ fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_send
     };
     let stream = ::audio::start_listening(&state.borrow().pa, selected_mic, mic_sender).ok();
     if stream.is_none() {
-        writeln!(io::stderr(), "Failed to open audio channel").ok();
+        writeln!(io::stderr(), "Failed to open audio input channel").ok();
     }
-    state.borrow_mut().pa_stream = stream;
+    state.borrow_mut().pa_input_stream = stream;
 }
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn start_playing_default(play_receiver: Receiver<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
+    if let Some(ref mut stream) = state.borrow_mut().pa_output_stream {
+        stream.stop().ok();
+    }
+
+    let stream = ::audio::start_playing_default(&state.borrow().pa, play_receiver).ok();
+    if stream.is_none() {
+        writeln!(io::stderr(), "Failed to open audio output channel").ok();
+    }
+    state.borrow_mut().pa_output_stream = stream;
+}
+
+fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, play_sender: Sender<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
     thread::spawn(move || {
         while let Ok(samples) = mic_receiver.recv() {
             //just in case we hit performance difficulties, clear out the channel
@@ -174,6 +190,11 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: 
                 None => String::new()
             };
             let error = fundamental.map(::transforms::hz_to_cents_error);
+
+            if let Some(fundamental) = fundamental {
+                let correct_pitch_signal = ::transforms::corrected_sine_wave(fundamental, ::audio::SAMPLE_RATE, ::audio::FRAMES);
+                play_sender.send(correct_pitch_signal).ok();
+            }
 
             match cross_thread_state.write() {
                 Ok(mut state) => {
