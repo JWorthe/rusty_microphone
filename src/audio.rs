@@ -2,6 +2,8 @@ use portaudio as pa;
 
 use std::sync::mpsc::*;
 
+use signal::Signal;
+
 pub const SAMPLE_RATE: f32 = 44100.0;
 // I want to use the frames constant in contexts where I need to cast
 // it to f32 (eg for generating a sine wave). Therefore its type must
@@ -31,13 +33,13 @@ pub fn get_default_device(pa: &pa::PortAudio) -> Result<u32, pa::Error> {
     Ok(default_input_index)
 }
 
-pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
+pub fn start_listening_default(pa: &pa::PortAudio, sender: Sender<Signal>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
     let default = get_default_device(pa)?;
     start_listening(pa, default, sender)
 }
 
 pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
-                       sender: Sender<Vec<f32>>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
+                       sender: Sender<Signal>) -> Result<pa::Stream<pa::NonBlocking, pa::Input<f32>>, pa::Error> {
     let device_info = try!(pa.device_info(pa::DeviceIndex(device_index)));
     let latency = device_info.default_low_input_latency;
 
@@ -53,7 +55,7 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
 
     // This callback A callback to pass to the non-blocking stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
-        match sender.send(Vec::from(buffer)) {
+        match sender.send(Signal::new(buffer, SAMPLE_RATE)) {
             Ok(_) => pa::Continue,
             Err(_) => pa::Complete
         }

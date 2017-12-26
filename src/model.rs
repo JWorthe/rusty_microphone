@@ -1,12 +1,12 @@
-use transforms;
+use signal::Signal;
+use correlation::Correlation;
+use pitch::Pitch;
 
 #[derive(Default)]
 pub struct Model {
-    pub fundamental_frequency: Option<f32>,
-    pub pitch: String,
-    pub error: Option<f32>,
-    pub signal: Vec<f32>,
-    pub correlation: Vec<f32>
+    pub pitch: Option<Pitch>,
+    pub signal: Signal,
+    pub correlation: Correlation
 }
 
 impl Model {
@@ -14,22 +14,18 @@ impl Model {
         Model::default()
     }
 
-    pub fn from_signal(signal: &[f32], sample_rate: f32) -> Model {
-        let correlation = transforms::correlation(signal);
-        let fundamental = transforms::find_fundamental_frequency(signal, sample_rate);
-        let pitch = fundamental.map_or(
-            String::new(),
-            transforms::hz_to_pitch
-        );
-        
-        let error = fundamental.map(transforms::hz_to_cents_error);
+    pub fn from_signal(signal: Signal) -> Model {
+        let correlation = Correlation::from_signal(&signal);
+        let pitch = correlation.find_fundamental_frequency(&signal);
         
         Model {
-            fundamental_frequency: fundamental,
             pitch: pitch,
-            error: error,
-            signal: transforms::align_to_rising_edge(signal),
+            signal: signal,
             correlation: correlation
         }
+    }
+
+    pub fn pitch_display(&self) -> String {
+        self.pitch.map_or(String::new(), |p| format!("{}", p))
     }
 }

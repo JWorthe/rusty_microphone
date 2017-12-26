@@ -2,6 +2,8 @@
 extern crate bencher;
 
 extern crate rusty_microphone;
+use rusty_microphone::signal::Signal;
+use rusty_microphone::correlation::Correlation;
 
 use bencher::Bencher;
 
@@ -24,11 +26,13 @@ fn sample_sinusoud(amplitude: f32, frequency: f32, phase: f32) -> Vec<f32> {
 }
 
 fn bench_correlation_on_sine_wave(b: &mut Bencher) {
-    let frequency = 440.0f32; //concert A
-    let samples = sample_sinusoud(1.0, frequency, 0.0);
+    let signal = Signal::new(
+        &sample_sinusoud(1.0, 440.0f32, 0.0),
+        SAMPLE_RATE
+    );
     
     b.iter(|| {
-        rusty_microphone::transforms::find_fundamental_frequency(&samples, SAMPLE_RATE)
+        Correlation::from_signal(&signal);
     })
 }
 benchmark_group!(transforms, bench_correlation_on_sine_wave);

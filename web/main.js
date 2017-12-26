@@ -129,9 +129,9 @@ var hzToPitch = function(hz) {
     return wrapped(hz);
 };
 
-function correlation(data) {
+function correlation(data, samplingRate) {
     return jsArrayToF32ArrayPtrMutateInPlace(data, function(dataPtr, dataLength) {
-        Module._correlation(dataPtr, dataLength);
+        Module._correlation(dataPtr, dataLength, samplingRate);
     });
 }
 

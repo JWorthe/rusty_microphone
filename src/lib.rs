@@ -1,4 +1,7 @@
-pub mod transforms;
+pub mod model;
+pub mod signal;
+pub mod correlation;
+pub mod pitch;
 
 #[cfg(not(target_os = "emscripten"))]
 extern crate gtk;
@@ -15,4 +18,3 @@ pub mod audio;
 #[cfg(target_os = "emscripten")]
 pub mod emscripten_api;
 
-pub mod model;
