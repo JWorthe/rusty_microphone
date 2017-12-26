@@ -14,3 +14,5 @@ pub mod audio;
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten_api;
+
+pub mod model;

@@ -10,6 +10,8 @@ use std::io::Write;
 use std::thread;
 use std::sync::mpsc::*;
 
+use model::Model;
+
 const FPS: u32 = 60;
 
 struct RustyUi {
@@ -28,14 +30,6 @@ struct ApplicationState {
     ui: RustyUi
 }
 
-struct CrossThreadState {
-    fundamental_frequency: Option<f32>,
-    pitch: String,
-    error: Option<f32>,
-    signal: Vec<f32>,
-    correlation: Vec<f32>
-}
-
 pub fn start_gui() -> Result<(), String> {
     let pa = try!(::audio::init().map_err(|e| e.to_string()));
     let microphones = try!(::audio::get_device_list(&pa).map_err(|e| e.to_string()));
@@ -49,13 +43,7 @@ pub fn start_gui() -> Result<(), String> {
         ui: create_window(microphones, default_microphone)
     }));
 
-    let cross_thread_state = Arc::new(RwLock::new(CrossThreadState {
-        fundamental_frequency: None,
-        pitch: String::new(),
-        error: None,
-        signal: Vec::new(),
-        correlation: Vec::new()
-    }));
+    let cross_thread_state = Arc::new(RwLock::new(Model::new()));
     
     let (mic_sender, mic_receiver) = channel();
 
@@ -160,28 +148,17 @@ fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_send
     state.borrow_mut().pa_stream = stream;
 }
 
-fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: Arc<RwLock<Model>>) {
     thread::spawn(move || {
         while let Ok(samples) = mic_receiver.recv() {
             //just in case we hit performance difficulties, clear out the channel
             while mic_receiver.try_recv().ok() != None {}
             
-            let signal = ::transforms::align_to_rising_edge(&samples);
-            let correlation = ::transforms::correlation(&samples);
-            let fundamental = ::transforms::find_fundamental_frequency(&samples, ::audio::SAMPLE_RATE);
-            let pitch = match fundamental {
-                Some(fundamental) => ::transforms::hz_to_pitch(fundamental),
-                None => String::new()
-            };
-            let error = fundamental.map(::transforms::hz_to_cents_error);
+            let new_model = Model::from_signal(&samples, ::audio::SAMPLE_RATE);
 
             match cross_thread_state.write() {
-                Ok(mut state) => {
-                    state.fundamental_frequency = fundamental;
-                    state.pitch = pitch;
-                    state.signal = signal;
-                    state.correlation = correlation;
-                    state.error = error;
+                Ok(mut model) => {
+                    *model = new_model
                 },
                 Err(err) => {
                     println!("Error updating cross thread state: {}", err);
@@ -191,7 +168,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: 
     });
 }
 
-fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
     gtk::timeout_add(1000/FPS, move || {
         let ui = &state.borrow().ui;
         if let Ok(cross_thread_state) = cross_thread_state.read() {
@@ -206,7 +183,7 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
     });
 }
 
-fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
     let outer_state = state.clone();
     let canvas = &outer_state.borrow().ui.pitch_error_indicator;
     canvas.connect_draw(move |canvas, context| {
@@ -246,7 +223,7 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
     });
 }
 
-fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
     let outer_state = state.clone();
     let canvas = &outer_state.borrow().ui.oscilloscope_chart;
     canvas.connect_draw(move |canvas, context| {
@@ -279,7 +256,7 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
     });
 }
 
-fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<CrossThreadState>>) {
+fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
     let outer_state = state.clone();
     let canvas = &outer_state.borrow().ui.correlation_chart;
     canvas.connect_draw(move |canvas, context| {
