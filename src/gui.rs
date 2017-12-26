@@ -11,6 +11,7 @@ use std::thread;
 use std::sync::mpsc::*;
 
 use model::Model;
+use audio::SAMPLE_RATE;
 
 const FPS: u32 = 60;
 
@@ -47,15 +48,15 @@ pub fn start_gui() -> Result<(), String> {
     
     let (mic_sender, mic_receiver) = channel();
 
-    connect_dropdown_choose_microphone(mic_sender, state.clone());
+    connect_dropdown_choose_microphone(mic_sender, Rc::clone(&state));
     
-    start_processing_audio(mic_receiver, cross_thread_state.clone());
-    setup_pitch_label_callbacks(state.clone(), cross_thread_state.clone());
-    setup_pitch_error_indicator_callbacks(state.clone(), cross_thread_state.clone());
-    setup_oscilloscope_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
-    setup_correlation_drawing_area_callbacks(state.clone(), cross_thread_state.clone());
+    start_processing_audio(mic_receiver, Arc::clone(&cross_thread_state));
+    setup_pitch_label_callbacks(Rc::clone(&state), Arc::clone(&cross_thread_state));
+    setup_pitch_error_indicator_callbacks(&state, Arc::clone(&cross_thread_state));
+    setup_oscilloscope_drawing_area_callbacks(&state, Arc::clone(&cross_thread_state));
+    setup_correlation_drawing_area_callbacks(&state, Arc::clone(&cross_thread_state));
 
-    setup_chart_visibility_callbacks(state.clone());
+    setup_chart_visibility_callbacks(Rc::clone(&state));
     
     gtk::main();
     Ok(())
@@ -127,13 +128,13 @@ fn set_dropdown_items(dropdown: &gtk::ComboBoxText, microphones: Vec<(u32, Strin
 
 fn connect_dropdown_choose_microphone(mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
     let dropdown = state.borrow().ui.dropdown.clone();
-    start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), state.clone());
+    start_listening_current_dropdown_value(&dropdown, mic_sender.clone(), &state);
     dropdown.connect_changed(move |dropdown: &gtk::ComboBoxText| {
-        start_listening_current_dropdown_value(dropdown, mic_sender.clone(), state.clone())
+        start_listening_current_dropdown_value(dropdown, mic_sender.clone(), &state)
     });
 }
 
-fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f32>>, state: Rc<RefCell<ApplicationState>>) {
+fn start_listening_current_dropdown_value(dropdown: &gtk::ComboBoxText, mic_sender: Sender<Vec<f32>>, state: &Rc<RefCell<ApplicationState>>) {
     if let Some(ref mut stream) = state.borrow_mut().pa_stream {
         stream.stop().ok();
     }
@@ -154,7 +155,7 @@ fn start_processing_audio(mic_receiver: Receiver<Vec<f32>>, cross_thread_state: 
             //just in case we hit performance difficulties, clear out the channel
             while mic_receiver.try_recv().ok() != None {}
             
-            let new_model = Model::from_signal(&samples, ::audio::SAMPLE_RATE);
+            let new_model = Model::from_signal(&samples, SAMPLE_RATE);
 
             match cross_thread_state.write() {
                 Ok(mut model) => {
@@ -183,19 +184,18 @@ fn setup_pitch_label_callbacks(state: Rc<RefCell<ApplicationState>>, cross_threa
     });
 }
 
-fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
-    let outer_state = state.clone();
-    let canvas = &outer_state.borrow().ui.pitch_error_indicator;
+fn setup_pitch_error_indicator_callbacks(state: &Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
+    let canvas = &state.borrow().ui.pitch_error_indicator;
     canvas.connect_draw(move |canvas, context| {
-        let width = canvas.get_allocated_width() as f64;
+        let width = f64::from(canvas.get_allocated_width());
         let midpoint = width / 2.0;
 
         let line_indicator_height = 20.0;
-        let color_indicator_height = canvas.get_allocated_height() as f64 - line_indicator_height;
+        let color_indicator_height = f64::from(canvas.get_allocated_height()) - line_indicator_height;
 
         match cross_thread_state.read().map(|state| state.error) {
             Ok(Some(error)) =>  {
-                let error_line_x = midpoint + error as f64 * midpoint / 50.0;
+                let error_line_x = midpoint + f64::from(error) * midpoint / 50.0;
                 context.new_path();
                 context.move_to(error_line_x, 0.0);
                 context.line_to(error_line_x, line_indicator_height);
@@ -203,12 +203,12 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
                 
                 
                 //flat on the left
-                context.set_source_rgb(0.0, 0.0, if error < 0.0 {-error as f64/50.0} else {0.0});
+                context.set_source_rgb(0.0, 0.0, if error < 0.0 {-f64::from(error)/50.0} else {0.0});
                 context.rectangle(0.0, line_indicator_height, midpoint, color_indicator_height+line_indicator_height);
                 context.fill();
 
                 //sharp on the right
-                context.set_source_rgb(if error > 0.0 {error as f64/50.0} else {0.0}, 0.0, 0.0);
+                context.set_source_rgb(if error > 0.0 {f64::from(error)/50.0} else {0.0}, 0.0, 0.0);
                 context.rectangle(midpoint, line_indicator_height, width, color_indicator_height+line_indicator_height);
                 context.fill();
             },
@@ -223,20 +223,19 @@ fn setup_pitch_error_indicator_callbacks(state: Rc<RefCell<ApplicationState>>, c
     });
 }
 
-fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
-    let outer_state = state.clone();
-    let canvas = &outer_state.borrow().ui.oscilloscope_chart;
+fn setup_oscilloscope_drawing_area_callbacks(state: &Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
+    let canvas = &state.borrow().ui.oscilloscope_chart;
     canvas.connect_draw(move |canvas, context| {
         if let Ok(cross_thread_state) = cross_thread_state.read() {
             let signal = &cross_thread_state.signal;
-            let width = canvas.get_allocated_width() as f64;
+            let width = f64::from(canvas.get_allocated_width());
             
             // Set as a constant so signal won't change size based on
             // zero point, but don't take the window size exactly
             // since some will be cropped off the beginning.
-            let len = ::audio::FRAMES as f64 * 0.8;
+            let len = f64::from(::audio::FRAMES) * 0.7;
             
-            let height = canvas.get_allocated_height() as f64;
+            let height = f64::from(canvas.get_allocated_height());
             let mid_height = height / 2.0;
             let max = 1.0;
 
@@ -245,7 +244,7 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
 
             for (i, &intensity) in signal.iter().enumerate() {
                 let x = i as f64 * width / len;
-                let y = mid_height - (intensity as f64 * mid_height / max);
+                let y = mid_height - (f64::from(intensity) * mid_height / max);
                 context.line_to(x, y);
             }
 
@@ -256,12 +255,11 @@ fn setup_oscilloscope_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>
     });
 }
 
-fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
-    let outer_state = state.clone();
-    let canvas = &outer_state.borrow().ui.correlation_chart;
+fn setup_correlation_drawing_area_callbacks(state: &Rc<RefCell<ApplicationState>>, cross_thread_state: Arc<RwLock<Model>>) {
+    let canvas = &state.borrow().ui.correlation_chart;
     canvas.connect_draw(move |canvas, context| {
-        let width = canvas.get_allocated_width() as f64;
-        let height = canvas.get_allocated_height() as f64;
+        let width = f64::from(canvas.get_allocated_width());
+        let height = f64::from(canvas.get_allocated_height());
         
         //draw zero
         context.new_path();
@@ -273,7 +271,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
             let correlation = &cross_thread_state.correlation;
             let len = correlation.len() as f64;
             let max = match correlation.first() {
-                Some(&c) => c as f64,
+                Some(&c) => f64::from(c),
                 None => 1.0
             };
             
@@ -281,7 +279,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
             context.move_to(0.0, height);
             for (i, &val) in correlation.iter().enumerate() {
                 let x = i as f64 * width / len;
-                let y = height/2.0 - (val as f64 * height / max / 2.0);
+                let y = height/2.0 - (f64::from(val) * height / max / 2.0);
                 context.line_to(x, y);
             }        
             context.stroke();
@@ -289,7 +287,7 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
             //draw the fundamental
             if let Some(fundamental) = cross_thread_state.fundamental_frequency {
                 context.new_path();
-                let fundamental_x = ::audio::SAMPLE_RATE as f64 / fundamental as f64 * width / len;
+                let fundamental_x = f64::from(SAMPLE_RATE) / f64::from(fundamental) * width / len;
                 context.move_to(fundamental_x, 0.0);
                 context.line_to(fundamental_x, height);
                 context.stroke();
@@ -301,17 +299,17 @@ fn setup_correlation_drawing_area_callbacks(state: Rc<RefCell<ApplicationState>>
 }
 
 fn setup_chart_visibility_callbacks(state: Rc<RefCell<ApplicationState>>) {
-    let outer_state = state.clone();
+    let outer_state = Rc::clone(&state);
     let oscilloscope_toggle_button = &outer_state.borrow().ui.oscilloscope_toggle_button;
     let correlation_toggle_button = &outer_state.borrow().ui.correlation_toggle_button;
 
-    let oscilloscope_state = state.clone();
+    let oscilloscope_state = Rc::clone(&state);
     oscilloscope_toggle_button.connect_clicked(move |_| {
         let chart = &oscilloscope_state.borrow().ui.oscilloscope_chart;
         chart.set_visible(!chart.get_visible());
     });
 
-    let correlation_state = state.clone();
+    let correlation_state = state;
     correlation_toggle_button.connect_clicked(move |_| {
         let chart = &correlation_state.borrow().ui.correlation_chart;
         chart.set_visible(!chart.get_visible());

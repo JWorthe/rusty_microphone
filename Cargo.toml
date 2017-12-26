@@ -8,8 +8,8 @@ bencher = "0.1.2"
 
 [target.'cfg(not(target_os = "emscripten"))'.dependencies]
 portaudio = "0.7.0"
-gtk = "0.1.1"
-cairo-rs = "0.1.1"
+gtk = "0.3.0"
+cairo-rs = "0.3.0"
 
 [[bench]]
 name = "transforms"

@@ -116,10 +116,10 @@ mod tests {
     use std::f32::consts::PI;
     
     const SAMPLE_RATE: f32 = 44100.0;
-    const FRAMES: usize = 512;
+    const FRAMES: u16 = 512;
 
     fn frequency_resolution() -> f32 {
-        SAMPLE_RATE / 2.0 / FRAMES as f32
+        SAMPLE_RATE / 2.0 / f32::from(FRAMES)
     }
 
     fn sin_arg(f: f32, t: f32, phase: f32) -> f32 {
@@ -129,14 +129,14 @@ mod tests {
     fn sample_sinusoud(amplitude: f32, frequency: f32, phase: f32) -> Vec<f32> {
         (0..FRAMES)
             .map(|x| {
-                let t = x as f32 / SAMPLE_RATE;
+                let t = f32::from(x) / SAMPLE_RATE;
                 sin_arg(frequency, t, phase).sin() * amplitude
             }).collect()
     }
     
     #[test]
     fn correlation_on_sine_wave() {
-        let frequency = 440.0 as f32; //concert A
+        let frequency = 440.0f32; //concert A
         
         let samples = sample_sinusoud(1.0, frequency, 0.0);
         let fundamental = find_fundamental_frequency(&samples, SAMPLE_RATE).expect("Find fundamental returned None");

@@ -3,7 +3,10 @@ use portaudio as pa;
 use std::sync::mpsc::*;
 
 pub const SAMPLE_RATE: f32 = 44100.0;
-pub const FRAMES: usize = 512;
+// I want to use the frames constant in contexts where I need to cast
+// it to f32 (eg for generating a sine wave). Therefore its type must
+// be convertable to f32 losslessly. Hence the type of u16.
+pub const FRAMES: u16 = 512;
 
 pub fn init() -> Result<pa::PortAudio, pa::Error> {
     pa::PortAudio::new()
@@ -43,10 +46,10 @@ pub fn start_listening(pa: &pa::PortAudio, device_index: u32,
     let input_params = pa::StreamParameters::<f32>::new(pa::DeviceIndex(device_index), 1, true, latency);
 
     // Check that the stream format is supported.
-    try!(pa.is_input_format_supported(input_params, SAMPLE_RATE as f64));
+    try!(pa.is_input_format_supported(input_params, f64::from(SAMPLE_RATE)));
 
     // Construct the settings with which we'll open our stream.
-    let stream_settings = pa::InputStreamSettings::new(input_params, SAMPLE_RATE as f64, FRAMES as u32);
+    let stream_settings = pa::InputStreamSettings::new(input_params, f64::from(SAMPLE_RATE), u32::from(FRAMES));
 
     // This callback A callback to pass to the non-blocking stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
