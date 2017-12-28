@@ -106,4 +106,8 @@ can embed in my website to allow others to use without needing to
 compile or install it themselves.
 
 Progress can be seen by running ~make build-web~ and opening
-~target/site/index.html~. This requires Make to be installed.
+~target/site/index.html~. This requires Make to be installed, and the
+wasm32-unknown-unknown target to be installed in your Rust nightly
+toolchain. If you are using Rustup, this can be done by running
+~rustup target add --toolchain nightly wasm32-unknown-unknown~
+
