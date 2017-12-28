@@ -1,19 +1,16 @@
 all: build
 
 build-web:
-	cargo build --target=wasm32-unknown-emscripten --release
+	cargo +nightly build --target=wasm32-unknown-unknown --release
 	mkdir -p target/site
-	cp target/wasm32-unknown-emscripten/release/rusty_microphone.js target/site/
-	cp target/wasm32-unknown-emscripten/release/deps/*.wasm target/site/
+	cp target/wasm32-unknown-unknown/release/*.wasm target/site/
 	cp web/* target/site/
 
 build-web-debug:
-	cargo build --target=wasm32-unknown-emscripten
+	cargo +nightly build --target=wasm32-unknown-unknown
 	mkdir -p target/site
-	cp target/wasm32-unknown-emscripten/debug/rusty_microphone.js target/site/
-	cp target/wasm32-unknown-emscripten/debug/deps/*.wasm target/site/
+	cp target/wasm32-unknown-unknown/debug/*.wasm target/site/
 	cp web/* target/site/
-
 
 build-desktop:
 	cargo build --release

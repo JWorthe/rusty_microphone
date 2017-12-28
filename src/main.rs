@@ -1,6 +1,6 @@
 extern crate rusty_microphone;
 
-#[cfg(not(target_os = "emscripten"))]
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use rusty_microphone::*;
 
@@ -11,7 +11,7 @@ fn main() {
     }
 }
 
-#[cfg(target_os = "emscripten")]
+#[cfg(target_arch = "wasm32")]
 fn main() {
-    println!("Hello Emscripten");
+    println!("Hello Wasm");
 }

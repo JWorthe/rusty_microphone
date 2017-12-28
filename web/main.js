@@ -5,7 +5,30 @@ var Module = {
     onRuntimeInitialized: main,
     onAbort: onAbort
 };
-checkBrowserSupport();
+
+var env = {
+    log2f: Math.log2,
+    roundf: Math.round
+};
+checkBrowserSupport(function() {
+    fetch('rusty_microphone.wasm')
+        .then(response => response.arrayBuffer())
+        .then(bytes => WebAssembly.instantiate(bytes, { env:env }))
+        .then(results => {
+            var mod = results.instance;
+            Module._find_fundamental_frequency = mod.exports.find_fundamental_frequency;
+            Module._hz_to_pitch = mod.exports.hz_to_pitch;
+            Module._hz_to_cents_error = mod.exports.hz_to_cents_error;
+            Module._correlation = mod.exports.correlation;
+
+            Module.memory = mod.exports.memory;
+            Module._malloc = mod.exports.malloc;
+            Module._free = mod.exports.free;
+            Module._free_str = mod.exports.free_str;
+
+            Module.onRuntimeInitialized();
+        });
+});
 
 function onAbort(reason) {
     document.getElementById('loading').setAttribute('style', 'display:none');
@@ -24,11 +47,14 @@ function supportsUserMedia() {
         typeof AudioContext === "function";
 }
 
-function checkBrowserSupport() {    
+function checkBrowserSupport(supportedCallback) {
     if (!supportsWasm() || !supportsUserMedia()) {
         document.getElementById('loading').setAttribute('style', 'display:none');
         document.getElementById('browser-support-error').removeAttribute('style');
-    }    
+    }
+    else {
+        supportedCallback();
+    }
 }
 
 /**
@@ -49,7 +75,7 @@ function jsArrayToF32ArrayPtr(jsArray, callback) {
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
     var dataPtr = Module._malloc(nDataBytes);
 
-    var dataHeap = new Uint8Array(Module.HEAPU8.buffer, dataPtr, nDataBytes);
+    var dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
     dataHeap.set(new Uint8Array(data.buffer));
 
     var result = callback(dataPtr, jsArray.length);
@@ -79,12 +105,12 @@ function jsArrayToF32ArrayPtrMutateInPlace(jsArray, mutate) {
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
     var dataPtr = Module._malloc(nDataBytes);
 
-    var dataHeap = new Uint8Array(Module.HEAPU8.buffer, dataPtr, nDataBytes);
+    var dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
     dataHeap.set(new Uint8Array(data.buffer));
 
     mutate(dataPtr, jsArray.length);
 
-    var mutatedData = new Float32Array(Module.HEAPU8.buffer, dataPtr, jsArray.length);
+    var mutatedData = new Float32Array(Module.memory.buffer, dataPtr, jsArray.length);
     var result = Array.prototype.slice.call(mutatedData);
     
     Module._free(dataPtr);
@@ -112,10 +138,35 @@ function findFundamentalFrequencyNoFree(data, samplingRate) {
     if (!dataPtr) {
         nDataBytes = data.length * data.BYTES_PER_ELEMENT;
         dataPtr = Module._malloc(nDataBytes);
-        dataHeap = new Uint8Array(Module.HEAPU8.buffer, dataPtr, nDataBytes);
+        dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
     }
     dataHeap.set(new Uint8Array(data.buffer, data.buffer.byteLength - nDataBytes));
     return Module._find_fundamental_frequency(dataPtr, data.length, samplingRate);    
+}
+
+/**
+ * Takes a pointer to a C-style string (ends in a 0), and interprets it as UTF-8.
+ */
+function copyCStr(ptr) {
+    var iter = ptr;
+
+    // ye olde 0 terminated string
+    function* collectCString() {
+        var memory = new Uint8Array(Module.memory.buffer);
+        while (memory[iter] !== 0) {
+            if (memory[iter] === undefined) {
+                throw new Error("Tried to read undef mem");
+            }
+            yield memory[iter];
+            iter += 1;
+        }
+    };
+
+    var buffer_as_u8 = new Uint8Array(collectCString());
+    var utf8Decoder = new TextDecoder("UTF-8");
+    var buffer_as_utf8 = utf8Decoder.decode(buffer_as_u8);
+    Module._free_str(ptr);
+    return buffer_as_utf8;
 }
 
 
@@ -123,10 +174,9 @@ function hzToCentsError(hz) {
     return Module._hz_to_cents_error(hz);
 }
 
-var hzToPitch = function(hz) {
-    var wrapped = Module.cwrap('hz_to_pitch', 'string', ['number']);
-    hzToPitch = wrapped;
-    return wrapped(hz);
+function hzToPitch(hz) {
+    var strPtr = Module._hz_to_pitch(hz);
+    return copyCStr(strPtr);
 };
 
 function correlation(data, samplingRate) {

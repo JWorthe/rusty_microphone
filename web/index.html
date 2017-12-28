@@ -1,47 +1,48 @@
+<!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-      <h1>Rusty Microphone</h1>
-      <div id="loading">
-        Loading...
-      </div>
-      <div id="browser-support-error" class="error" style="display:none;">
-        <p>
-          It looks like something has gone wrong while loading. The
-          most likely reason for this is that this app doesn't support
-          your web browser.
-        </p>
+  </head>
+  <body>
+    <h1>Rusty Microphone</h1>
+    <div id="loading">
+      Loading...
+    </div>
+    <div id="browser-support-error" class="error" style="display:none;">
+      <p>
+        It looks like something has gone wrong while loading. The
+        most likely reason for this is that this app doesn't support
+        your web browser.
+      </p>
 
-        <p>
-          I test with the latest version of Firefox, but it should
-          also work with recent versions of Chrome, Microsoft Edge,
-          Safari and Opera. If you're running one of these browsers,
-          please make sure you've updated to the latest version.
-        </p>
+      <p>
+        I test with the latest version of Firefox, but it should
+        also work with recent versions of Chrome, Microsoft Edge,
+        Safari and Opera. If you're running one of these browsers,
+        please make sure you've updated to the latest version.
+      </p>
+    </div>
+    <div id="unexpected-error" class="error" style="display:none;">
+      <p>
+        An unexpected error has occurred. Please try again later.
+      </p>
+    </div>
+    <div id="rusty-microphone" style="display:none;">
+      <p>The current note being played is <span id="pitch-label">unknown</span></p>
+      <div id="pitch-indicator-bar-container">
+        <div id="pitch-indicator-bar"></div>
       </div>
-      <div id="unexpected-error" class="error" style="display:none;">
-        <p>
-          An unexpected error has occurred. Please try again later.
-        </p>
-      </div>
-      <div id="rusty-microphone" style="display:none;">
-        <p>The current note being played is <span id="pitch-label">unknown</span></p>
-        <div id="pitch-indicator-bar-container">
-          <div id="pitch-indicator-bar"></div>
-        </div>
-        <div id="pitch-indicator-colours">
-          <div id="flat-indicator"></div>
-          <div id="sharp-indicator"></div>
-        </div>
-
-        <canvas id="oscilloscope" width="320" height="300"></canvas>
-
-        <p>The current framerate is <span id="frame-rate">0</span>FPS</p>
+      <div id="pitch-indicator-colours">
+        <div id="flat-indicator"></div>
+        <div id="sharp-indicator"></div>
       </div>
 
-      <script src="main.js"></script>
-      <script src="rusty_microphone.js"></script>
-    </body>
+      <canvas id="oscilloscope" width="320" height="300"></canvas>
+
+      <p>The current framerate is <span id="frame-rate">0</span>FPS</p>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
 </html>
