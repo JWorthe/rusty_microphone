@@ -34,9 +34,9 @@ pub extern "C" fn free_str(ptr: *mut c_char) {
 }
 
 #[no_mangle]
-pub extern "C" fn find_fundamental_frequency(signal_ptr: *const f32, signal_length: isize, sample_rate: f32) -> f32 {
+pub extern "C" fn find_fundamental_frequency(signal_ptr: *const f32, signal_length: usize, sample_rate: f32) -> f32 {
     let signal_slice = unsafe {
-        &slice::from_raw_parts(signal_ptr, signal_length as usize)
+        &slice::from_raw_parts(signal_ptr, signal_length)
     };
     let signal = Signal::new(signal_slice, sample_rate);
     let model = Model::from_signal(signal);
@@ -59,9 +59,9 @@ pub extern "C" fn hz_to_pitch(hz: f32) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn correlation(signal_ptr: *mut f32, signal_length: isize, sample_rate: f32) {
+pub extern "C" fn correlation(signal_ptr: *mut f32, signal_length: usize, sample_rate: f32) {
     let signal_slice = unsafe {
-        &slice::from_raw_parts(signal_ptr, signal_length as usize)
+        &slice::from_raw_parts(signal_ptr, signal_length)
     };
 
     let signal = Signal::new(signal_slice, sample_rate);
