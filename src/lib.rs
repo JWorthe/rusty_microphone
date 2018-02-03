@@ -16,5 +16,5 @@ extern crate portaudio;
 pub mod audio;
 
 #[cfg(target_arch = "wasm32")]
-pub mod emscripten_api;
+pub mod wasm_api;
 
