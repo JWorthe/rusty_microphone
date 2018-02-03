@@ -1,40 +1,20 @@
 // This is read and used by `rusty_microphone.js`
-var Module = {
-    noInitialRun: true,
-    noExitRuntime: true,
-    onRuntimeInitialized: main,
-    onAbort: onAbort
-};
+var mod = null;
 
 var env = {
     log2f: Math.log2,
     roundf: Math.round
 };
+
 checkBrowserSupport(function() {
     fetch('rusty_microphone.wasm')
         .then(response => response.arrayBuffer())
         .then(bytes => WebAssembly.instantiate(bytes, { env:env }))
         .then(results => {
-            var mod = results.instance;
-            Module._find_fundamental_frequency = mod.exports.find_fundamental_frequency;
-            Module._hz_to_pitch = mod.exports.hz_to_pitch;
-            Module._hz_to_cents_error = mod.exports.hz_to_cents_error;
-            Module._correlation = mod.exports.correlation;
-
-            Module.memory = mod.exports.memory;
-            Module._malloc = mod.exports.malloc;
-            Module._free = mod.exports.free;
-            Module._free_str = mod.exports.free_str;
-
-            Module.onRuntimeInitialized();
+            mod = results.instance;
+            main();
         });
 });
-
-function onAbort(reason) {
-    document.getElementById('loading').setAttribute('style', 'display:none');
-    document.getElementById('rusty-microphone').setAttribute('style', 'display:none');
-    document.getElementById('unexpected-error').removeAttribute('style');
-}
 
 function supportsWasm() {
     return typeof WebAssembly === 'object';
@@ -73,14 +53,14 @@ function checkBrowserSupport(supportedCallback) {
 function jsArrayToF32ArrayPtr(jsArray, callback) {
     var data = (jsArray instanceof Float32Array) ? jsArray : new Float32Array(jsArray);
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
-    var dataPtr = Module._malloc(nDataBytes);
+    var dataPtr = mod.exports.malloc(nDataBytes);
 
-    var dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
+    var dataHeap = new Uint8Array(mod.exports.memory.buffer, dataPtr, nDataBytes);
     dataHeap.set(new Uint8Array(data.buffer));
 
     var result = callback(dataPtr, jsArray.length);
 
-    Module._free(dataPtr);
+    mod.exports.free(dataPtr, nDataBytes);
     
     return result;
 }
@@ -103,24 +83,24 @@ function jsArrayToF32ArrayPtr(jsArray, callback) {
 function jsArrayToF32ArrayPtrMutateInPlace(jsArray, mutate) {
     var data = new Float32Array(jsArray);
     var nDataBytes = data.length * data.BYTES_PER_ELEMENT;
-    var dataPtr = Module._malloc(nDataBytes);
+    var dataPtr = mod.exports.malloc(nDataBytes);
 
-    var dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
+    var dataHeap = new Uint8Array(mod.exports.memory.buffer, dataPtr, nDataBytes);
     dataHeap.set(new Uint8Array(data.buffer));
 
     mutate(dataPtr, jsArray.length);
 
-    var mutatedData = new Float32Array(Module.memory.buffer, dataPtr, jsArray.length);
+    var mutatedData = new Float32Array(mod.exports.memory.buffer, dataPtr, jsArray.length);
     var result = Array.prototype.slice.call(mutatedData);
     
-    Module._free(dataPtr);
+    mod.exports.free(dataPtr, nDataBytes);
     
     return result;
 }
 
 function findFundamentalFrequency(data, samplingRate) {
     return jsArrayToF32ArrayPtr(data, function(dataPtr, dataLength) {
-        return Module._find_fundamental_frequency(dataPtr, dataLength, samplingRate);
+        return mod.exports.find_fundamental_frequency(dataPtr, dataLength, samplingRate);
     });
 }
 
@@ -137,11 +117,11 @@ var dataHeap = null;
 function findFundamentalFrequencyNoFree(data, samplingRate) {
     if (!dataPtr) {
         nDataBytes = data.length * data.BYTES_PER_ELEMENT;
-        dataPtr = Module._malloc(nDataBytes);
-        dataHeap = new Uint8Array(Module.memory.buffer, dataPtr, nDataBytes);
+        dataPtr = mod.exports.malloc(nDataBytes);
+        dataHeap = new Uint8Array(mod.exports.memory.buffer, dataPtr, nDataBytes);
     }
     dataHeap.set(new Uint8Array(data.buffer, data.buffer.byteLength - nDataBytes));
-    return Module._find_fundamental_frequency(dataPtr, data.length, samplingRate);    
+    return mod.exports.find_fundamental_frequency(dataPtr, data.length, samplingRate);    
 }
 
 /**
@@ -152,7 +132,7 @@ function copyCStr(ptr) {
 
     // ye olde 0 terminated string
     function* collectCString() {
-        var memory = new Uint8Array(Module.memory.buffer);
+        var memory = new Uint8Array(mod.exports.memory.buffer);
         while (memory[iter] !== 0) {
             if (memory[iter] === undefined) {
                 throw new Error("Tried to read undef mem");
@@ -165,23 +145,23 @@ function copyCStr(ptr) {
     var buffer_as_u8 = new Uint8Array(collectCString());
     var utf8Decoder = new TextDecoder("UTF-8");
     var buffer_as_utf8 = utf8Decoder.decode(buffer_as_u8);
-    Module._free_str(ptr);
+    mod.exports.free_str(ptr);
     return buffer_as_utf8;
 }
 
 
 function hzToCentsError(hz) {
-    return Module._hz_to_cents_error(hz);
+    return mod.exports.hz_to_cents_error(hz);
 }
 
 function hzToPitch(hz) {
-    var strPtr = Module._hz_to_pitch(hz);
+    var strPtr = mod.exports.hz_to_pitch(hz);
     return copyCStr(strPtr);
 };
 
 function correlation(data, samplingRate) {
     return jsArrayToF32ArrayPtrMutateInPlace(data, function(dataPtr, dataLength) {
-        Module._correlation(dataPtr, dataLength, samplingRate);
+        mod.exports.correlation(dataPtr, dataLength, samplingRate);
     });
 }
 
@@ -213,6 +193,7 @@ function initView() {
     document.getElementById('browser-support-error').setAttribute('style', 'display: none');
     document.getElementById('unexpected-error').setAttribute('style', 'display: none');
     document.getElementById('rusty-microphone').removeAttribute('style');
+    drawDebugGraph([]);
 
     function draw(signal, timestamp, pitch, error) {
         drawDebugGraph(signal);
@@ -288,32 +269,36 @@ function initView() {
 
 
 function main() {
-    if (!supportsUserMedia()) {
-        return;
-    }
+    var view = initView();
+
+    document.getElementById('start-button').addEventListener('click', start);
     
-    navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function(stream) {
-            var context = new AudioContext();
-            var input = context.createMediaStreamSource(stream);
-            var analyser = context.createAnalyser();
-            analyser.fftSize = 512;
-            analyser.smoothingTimeConstant = 0;
-            input.connect(analyser);
+    function start() {
+        document.getElementById('start-button').remove();
+        
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function(stream) {
+                var context = new AudioContext();
+                var input = context.createMediaStreamSource(stream);
+                var analyser = context.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0;
+                input.connect(analyser);
 
-            var view = initView();
-            var dataArray = new Float32Array(analyser.fftSize);
+                var dataArray = new Float32Array(analyser.fftSize);
 
-            function analyserNodeCallback(timestamp) {
-                analyser.getFloatTimeDomainData(dataArray);
-                update(view, dataArray, context.sampleRate, timestamp);
+                function analyserNodeCallback(timestamp) {
+                    analyser.getFloatTimeDomainData(dataArray);
+                    update(view, dataArray, context.sampleRate, timestamp);
+                    window.requestAnimationFrame(analyserNodeCallback);
+                }
+
                 window.requestAnimationFrame(analyserNodeCallback);
-            }
+            })
+            .catch(function(err) {
+                document.getElementById('loading').setAttribute('style', 'display:none');
+                document.getElementById('unexpected-error').removeAttribute('style');
+            });
+    }
 
-            window.requestAnimationFrame(analyserNodeCallback);
-        })
-        .catch(function(err) {
-            document.getElementById('loading').setAttribute('style', 'display:none');
-            document.getElementById('unexpected-error').removeAttribute('style');
-        });
 }
