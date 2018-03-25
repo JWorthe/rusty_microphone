@@ -11,6 +11,8 @@ trumpet and working on my intonation.
 
 More information on how the project works can be read [[https://www.worthe-it.co.za/programming/2017/08/14/rusty-microphone.html][here]].
 
+[[https://www.worthe-it.co.za/rusty-microphone/][Live demo]]
+
 * Getting started
 
 ** Environment Setup
@@ -44,7 +46,6 @@ On Fedora
 yum install gtk3-devel portaudio-devel
 #+END_SRC
 
-
 ** Compiling and running
 
 To compile the project:
@@ -65,6 +66,30 @@ setting up a CI server.
 #+BEGIN_SRC sh
 cargo test
 #+END_SRC
+
+** WebAssembly
+
+This project also supports WebAssembly as a compilation target. To
+start, you need to install the nightly rust compiler toolchain and
+~wasm32-unknown-unknown~ target. If you installed Rust using Rustup,
+then you can do this with
+
+#+BEGIN_SRC sh
+rustup toolchain install nightly
+rustup target add wasm32-unknown-unknown --toolchain nightly
+#+END_SRC
+
+You can then compile the project with Make.
+
+#+BEGIN_SRC sh
+make build-web
+#+END_SRC
+
+If you choose not to use Make, you can look in ~Makefile~ for the
+instructions that ~make build-web~ is actually an alias for.
+
+After compiling, open ~target/site/index.html~ in any modern web
+browser.
 
 * Project structure
 ** File Structure
@@ -97,17 +122,4 @@ Unfortunately, Windows is not currently supported. If you wish to
 contribute to adding Windows support, the most useful approach would
 be to take a look at the [[https://github.com/RustAudio/rust-portaudio/issues/71][open issue in rust-portaudio]] for supporting
 Windows in their build script.
-* Upcoming Features
-
-The main upcoming feature that I have planned is to create a
-WebAssembly build of the core logic of the application. With this,
-some HTML, and the Web Audio API, I will create an application that I
-can embed in my website to allow others to use without needing to
-compile or install it themselves.
-
-Progress can be seen by running ~make build-web~ and opening
-~target/site/index.html~. This requires Make to be installed, and the
-wasm32-unknown-unknown target to be installed in your Rust nightly
-toolchain. If you are using Rustup, this can be done by running
-~rustup target add --toolchain nightly wasm32-unknown-unknown~
 
