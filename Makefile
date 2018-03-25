@@ -6,12 +6,6 @@ build-web:
 	cp target/wasm32-unknown-unknown/release/*.wasm target/site/
 	cp web/* target/site/
 
-build-web-debug:
-	cargo +nightly build --target=wasm32-unknown-unknown
-	mkdir -p target/site
-	cp target/wasm32-unknown-unknown/debug/*.wasm target/site/
-	cp web/* target/site/
-
 build-desktop:
 	cargo build --release
 
